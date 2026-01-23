@@ -1,0 +1,5 @@
+{
+  "name": "Osmak AMS System 4",
+  "description": "Antimicrobial Stewardship Program application for Ospital ng Makati, featuring role-based access for Pharmacists, IDS, and AMS administrators.",
+  "requestFramePermissions": []
+}

@@ -1,0 +1,465 @@
+
+import { DrugType } from '../types';
+
+export interface DrugMonograph {
+  restricted: boolean;
+  spectrum: string;
+  dosing: string;
+  renal: string;
+  hepatic: string;
+  duration: string;
+  monitoring: string;
+  warnings?: string;
+  ams?: string;
+  weightBased?: boolean;
+  mgPerKgDose?: number;
+  restriction?: DrugType; // Legacy support
+}
+
+export const PEDIATRIC_MONOGRAPHS: { [key: string]: DrugMonograph } = {
+  // ========== RESTRICTED ==========
+  "Acyclovir": {
+    spectrum: "Antiviral active mainly against HSV-1, HSV-2, and VZV.",
+    dosing: "10–15 mg/kg/dose IV q8h (usual max 600 mg/dose) for severe HSV/VZV infections; lower doses for mucocutaneous disease.",
+    renal: "Reduce dose and/or extend interval if eGFR is reduced; risk of crystal nephropathy with rapid infusion or dehydration.",
+    hepatic: "No major adjustment usually required; monitor if significant hepatic dysfunction.",
+    duration: "Typically 7–14 days depending on indication (e.g., encephalitis 14–21 days).",
+    monitoring: "Renal function, urine output; watch for neurotoxicity in renal impairment.",
+    warnings: "Ensure adequate hydration; adjust dosing carefully in neonates and renal impairment.",
+    ams: "Reserve for documented/suspected HSV or VZV; avoid routine prophylactic use outside guidelines.",
+    weightBased: true,
+    mgPerKgDose: 10,
+    restricted: true
+  },
+  "Amphotericin B": {
+    spectrum: "Broad-spectrum antifungal active against most yeasts and molds; reduced activity vs some Aspergillus species for deoxycholate; lipid formulations preferred for toxicity.",
+    dosing: "Conventional amphotericin B deoxycholate: 0.5–1 mg/kg/day IV; lipid formulations: 3–5 mg/kg/day IV.",
+    renal: "Nephrotoxic; monitor eGFR/creatinine and electrolytes closely; avoid other nephrotoxins.",
+    hepatic: "No routine dose adjustment, but monitor liver function tests with prolonged therapy.",
+    duration: "Often several weeks depending on site/severity of infection and step-down to azoles.",
+    monitoring: "Renal function, electrolytes (K, Mg), CBC, infusion reactions (fever, chills).",
+    warnings: "High risk of nephrotoxicity and electrolyte wasting; premedicate for infusion reactions as per protocol.",
+    ams: "Reserve for severe systemic fungal infections, CNS disease, or when azoles/echinocandins are inadequate.",
+    weightBased: true,
+    mgPerKgDose: 1,
+    restricted: true
+  },
+  "Aztreonam": {
+    spectrum: "Monobactam active against aerobic Gram-negative bacilli, including Pseudomonas; no Gram-positive or anaerobic activity.",
+    dosing: "30–50 mg/kg/dose IV q6–8h (max 2 g/dose, 8 g/day).",
+    renal: "Adjust interval/dose in moderate to severe renal impairment.",
+    hepatic: "No major dose change typically needed.",
+    duration: "Usually 7–14 days depending on infection type and source control.",
+    monitoring: "Renal function, CBC, signs of hypersensitivity.",
+    warnings: "Low cross-reactivity with penicillin allergy, but use cautiously in patients with severe β-lactam allergy.",
+    ams: "Use mainly for Gram-negative infections, especially in patients with significant β-lactam allergy.",
+    weightBased: true,
+    mgPerKgDose: 40,
+    restricted: true
+  },
+  "Caspofungin (Echinocandin)": {
+    spectrum: "Echinocandin active against Candida spp. and Aspergillus spp. (fungistatic for Aspergillus).",
+    dosing: "Loading dose 70 mg/m² (max 70 mg) IV day 1, then 50 mg/m²/day (max 70 mg/day).",
+    renal: "No adjustment required in renal impairment.",
+    hepatic: "Reduce maintenance dose in moderate hepatic impairment; avoid or use cautiously in severe hepatic disease.",
+    duration: "Guided by site and severity of infection; often at least 14 days after clearance of candidemia and symptom resolution.",
+    monitoring: "LFTs, clinical response, infusion-related reactions.",
+    warnings: "Potential hepatotoxicity; avoid unnecessary combination with other hepatotoxic drugs.",
+    ams: "Reserve for invasive candidiasis or aspergillosis when azoles are contraindicated or ineffective.",
+    weightBased: false,
+    mgPerKgDose: 0,
+    restricted: true
+  },
+  "Cefepime": {
+    spectrum: "Fourth-generation cephalosporin with broad Gram-negative (including Pseudomonas) and some Gram-positive coverage.",
+    dosing: "50 mg/kg/dose IV q8–12h (max 2 g/dose) depending on severity and site of infection.",
+    renal: "Adjust dose/interval if eGFR reduced; neurotoxicity risk in renal impairment.",
+    hepatic: "No routine adjustment needed.",
+    duration: "Typically 7–14 days depending on indication.",
+    monitoring: "Renal function, neurologic status (especially in renal insufficiency), CBC.",
+    warnings: "Risk of neurotoxicity (encephalopathy, seizures) with high levels in renal impairment.",
+    ams: "Reserve for suspected Pseudomonas or serious Gram-negative infections at high risk for resistance.",
+    weightBased: true,
+    mgPerKgDose: 50,
+    restricted: true
+  },
+  "Colistin": {
+    spectrum: "Polymyxin active mainly against multidrug-resistant Gram-negative bacilli (e.g., Acinetobacter, Pseudomonas, some Enterobacteriaceae).",
+    dosing: "Dose expressed as colistin base activity; protocols vary (e.g., 2.5–5 mg CBA/kg/day IV in divided doses). Use institutional dosing guideline.",
+    renal: "Significant nephrotoxicity; adjust dose in renal impairment; monitor closely.",
+    hepatic: "No primary hepatic adjustment; toxicity predominantly renal and neurologic.",
+    duration: "Use minimum effective duration; often 7–14+ days for MDR infections.",
+    monitoring: "Renal function, neurologic status (paresthesia, dizziness), drug levels if available.",
+    warnings: "High risk of nephro- and neurotoxicity; avoid combination with other nephrotoxins where possible.",
+    ams: "Reserve strictly for MDR Gram-negative infections where no safer alternatives exist.",
+    weightBased: false,
+    mgPerKgDose: 0,
+    restricted: true
+  },
+  "Ciprofloxacin": {
+    spectrum: "Fluoroquinolone with strong Gram-negative (including Pseudomonas) and limited Gram-positive and atypical coverage.",
+    dosing: "10–15 mg/kg/dose PO or IV q12h (max 400 mg IV/dose or 750 mg PO/dose).",
+    renal: "Adjust dose/interval in moderate to severe renal impairment.",
+    hepatic: "Generally no dose adjustment; monitor in significant hepatic dysfunction.",
+    duration: "Usually 7–14 days; longer for osteomyelitis, deep-seated infection.",
+    monitoring: "GI tolerance, QT interval if combined with other QT-prolonging agents, musculoskeletal symptoms.",
+    warnings: "Risk of tendinopathy, QT prolongation, CNS effects; avoid as first-line in most children unless clear indication.",
+    ams: "Use for specific high-risk situations (e.g., Pseudomonas, serious Gram-negative infections) when safer alternatives are not appropriate.",
+    weightBased: true,
+    mgPerKgDose: 15,
+    restricted: true
+  },
+  "Doripenem": {
+    spectrum: "Carbapenem with broad Gram-negative (including Pseudomonas), Gram-positive, and limited anaerobic coverage.",
+    dosing: "10–20 mg/kg/dose IV q8h (max 500 mg/dose), depending on severity.",
+    renal: "Adjust dosing in renal impairment.",
+    hepatic: "No routine adjustment; monitor in severe hepatic disease.",
+    duration: "Typically 7–14 days; individualized by source control and clinical response.",
+    monitoring: "Renal function, neurologic status (seizure risk), CBC.",
+    warnings: "Risk of seizures in predisposed patients; similar cautions as other carbapenems.",
+    ams: "Reserve for severe MDR Gram-negative infections where narrower-spectrum options are unsuitable.",
+    weightBased: true,
+    mgPerKgDose: 15,
+    restricted: true
+  },
+  "Ertapenem": {
+    spectrum: "Carbapenem active against many Enterobacteriaceae and anaerobes; no activity vs Pseudomonas or Acinetobacter.",
+    dosing: "15 mg/kg/dose IV/IM q12h (max 1 g/day) in children 3 months–12 years; once daily dosing in older children/adolescents.",
+    renal: "Adjust dose/interval in significant renal impairment.",
+    hepatic: "No routine adjustment required.",
+    duration: "Usually 7–14 days, depending on infection.",
+    monitoring: "Renal function, GI symptoms, CBC.",
+    warnings: "Seizure risk is lower than imipenem, but still use caution in patients with CNS disorders.",
+    ams: "Reserve for ESBL-producing Enterobacteriaceae and complicated infections where narrower options are inadequate.",
+    weightBased: true,
+    mgPerKgDose: 15,
+    restricted: true
+  },
+  "Famciclovir": {
+    spectrum: "Oral antiviral active against HSV and VZV, used mainly in older children and adolescents.",
+    dosing: "Typical pediatric dosing: 20–40 mg/kg/dose PO q8h (max adult dose) depending on indication and age; confirm with local protocol.",
+    renal: "Adjust dose when eGFR reduced.",
+    hepatic: "Use with caution in significant hepatic impairment.",
+    duration: "Usually 5–10 days for mucocutaneous infections; longer for zoster or immunocompromised hosts.",
+    monitoring: "Renal function; clinical response.",
+    warnings: "Limited pediatric data in younger age groups; use per specialist guidance.",
+    ams: "Use for HSV/VZV when oral therapy appropriate and adherence feasible.",
+    weightBased: true,
+    mgPerKgDose: 25,
+    restricted: true
+  },
+  "Fluconazole IV": {
+    spectrum: "Triazole antifungal active against Candida spp. (not C. krusei) and Cryptococcus spp.",
+    dosing: "6–12 mg/kg/day IV (max 400–800 mg/day depending on indication).",
+    renal: "Reduce maintenance dose by 50% if eGFR <50 mL/min/1.73m².",
+    hepatic: "Monitor LFTs; use with caution in significant hepatic disease.",
+    duration: "Depends on syndrome; at least 14 days after blood culture clearance for candidemia.",
+    monitoring: "LFTs, renal function, clinical response.",
+    warnings: "Hepatotoxicity possible; risk of drug interactions; potential for QT prolongation.",
+    ams: "Restricted antifungal for parenteral administration in pediatrics.",
+    weightBased: true,
+    mgPerKgDose: 12,
+    restricted: true
+  },
+  "Flucytosine": {
+    spectrum: "Antimetabolite antifungal used in combination (usually with amphotericin B) for cryptococcal meningitis or severe Candida infections.",
+    dosing: "25 mg/kg/dose PO q6h (total 100 mg/kg/day).",
+    renal: "Adjust dose based on creatinine clearance and, ideally, drug levels.",
+    hepatic: "Use caution; hepatotoxicity possible; monitor LFTs closely.",
+    duration: "Typically 2 weeks induction for cryptococcal meningitis with amphotericin B, then step-down to azole.",
+    monitoring: "CBC (risk of leukopenia, thrombocytopenia), renal function, LFTs, drug levels if available.",
+    warnings: "Hematologic and hepatic toxicity common at high levels; avoid monotherapy due to rapid resistance.",
+    ams: "Reserve for specialist-directed combination therapy (e.g., cryptococcal meningitis).",
+    weightBased: true,
+    mgPerKgDose: 25,
+    restricted: true
+  },
+  "Imipenem": {
+    spectrum: "Carbapenem with very broad Gram-negative, Gram-positive, and anaerobic coverage including some Pseudomonas.",
+    dosing: "15–25 mg/kg/dose IV q6h (max 500 mg/dose) depending on severity and age.",
+    renal: "Adjust dose/interval in renal impairment; seizure risk increases with high levels.",
+    hepatic: "No routine adjustment but monitor in severe hepatic disease.",
+    duration: "Typically 7–14 days; longer for deep or complicated infections.",
+    monitoring: "Renal function, neurologic status (seizures), CBC.",
+    warnings: "Higher seizure risk compared to some other carbapenems, especially with CNS disease or renal impairment.",
+    ams: "Reserve for severe polymicrobial or MDR infections when narrower spectrum is not appropriate.",
+    weightBased: true,
+    mgPerKgDose: 20,
+    restricted: true
+  },
+  "Levofloxacin": {
+    spectrum: "Respiratory fluoroquinolone with activity against many Gram-negatives, Gram-positives, and atypicals.",
+    dosing: "10–15 mg/kg/dose PO/IV q12–24h (max 750 mg/day), depending on indication and age.",
+    renal: "Adjust dose/interval in renal impairment.",
+    hepatic: "No routine adjustment; monitor with significant liver disease.",
+    duration: "Typically 7–14 days; longer for certain deep infections.",
+    monitoring: "QT interval, tendinopathy, CNS symptoms, GI tolerance.",
+    warnings: "Risk of tendon injury, QT prolongation, dysglycemia; reserve for situations where safer agents are not suitable.",
+    ams: "Use selectively (e.g., MDR pneumococcus, Pseudomonas) and de-escalate when possible.",
+    weightBased: true,
+    mgPerKgDose: 10,
+    restricted: true
+  },
+  "Meropenem": {
+    spectrum: "Carbapenem with broad Gram-negative (including ESBL, Pseudomonas), Gram-positive, and anaerobic coverage.",
+    dosing: "20–40 mg/kg/dose IV q8h (max 2 g/dose) depending on site/severity; higher doses for meningitis.",
+    renal: "Adjust dose/interval if eGFR <50 mL/min/1.73m².",
+    hepatic: "No routine dose adjustment; monitor with severe hepatic disease.",
+    duration: "Typically 7–14 days; longer for CNS/osteomyelitis or deep infections.",
+    monitoring: "Renal function, seizure risk in predisposed patients, CBC.",
+    warnings: "Seizure risk exists but lower than imipenem; caution with CNS disease and high doses.",
+    ams: "Reserve for ESBL/MDR Gram-negative organisms or critically ill patients at high risk of resistance.",
+    weightBased: true,
+    mgPerKgDose: 30,
+    restricted: true
+  },
+  "Micafungin (Echinocandin)": {
+    spectrum: "Echinocandin active against Candida spp. and Aspergillus spp. (fungistatic for Aspergillus).",
+    dosing: "2–4 mg/kg/day IV (max 100 mg/day) depending on age and indication.",
+    renal: "No adjustment required.",
+    hepatic: "Use caution in significant hepatic impairment; monitor LFTs.",
+    duration: "Typically at least 14 days after clearance of blood cultures and symptom resolution for candidemia.",
+    monitoring: "LFTs, clinical response, infusion-related reactions.",
+    warnings: "Potential hepatotoxicity; avoid unnecessary combination with other hepatotoxins.",
+    ams: "Reserve for invasive candidiasis or aspergillosis when azoles are unsuitable or resistance documented.",
+    weightBased: true,
+    mgPerKgDose: 3,
+    restricted: true
+  },
+  "Moxifloxacin": {
+    spectrum: "Fluoroquinolone with enhanced Gram-positive and anaerobic coverage compared with older agents.",
+    dosing: "Pediatric use limited and off-label; if used, typically up to 7–10 mg/kg once daily (max adult 400 mg/day). Use only with specialist input.",
+    renal: "No major adjustment; monitor in renal impairment.",
+    hepatic: "Use with caution; avoid in severe hepatic failure.",
+    duration: "Typically 7–14 days depending on infection.",
+    monitoring: "QT interval, CNS effects, musculoskeletal symptoms, hepatic function.",
+    warnings: "Significant risk of QT prolongation and tendon toxicity; rarely preferred in children.",
+    ams: "Use only when no safer alternative exists and with subspecialty approval.",
+    weightBased: true,
+    mgPerKgDose: 7,
+    restricted: true
+  },
+  "Ofloxacin": {
+    spectrum: "Fluoroquinolone active mainly against Gram-negative organisms and some Gram-positive.",
+    dosing: "Typically 7.5–10 mg/kg/dose PO q12h (max 400 mg/dose); use only with specialist input.",
+    renal: "Adjust dose/interval in renal impairment.",
+    hepatic: "Use caution; monitor in hepatic dysfunction.",
+    duration: "Usually 7–14 days.",
+    monitoring: "CNS effects, tendon symptoms, GI tolerance, QT interval.",
+    warnings: "Fluoroquinolone class adverse effects (tendinopathy, QT, CNS); rarely first-line in children.",
+    ams: "Reserve for specific MDR infections where no safer alternatives exist.",
+    weightBased: true,
+    mgPerKgDose: 10,
+    restricted: true
+  },
+  "Remdesivir": {
+    spectrum: "Antiviral with activity against SARS-CoV-2; minimal data for other RNA viruses.",
+    dosing: "Loading dose 5 mg/kg IV once (max 200 mg) then 2.5 mg/kg IV q24h (max 100 mg) for 3–5+ days depending on severity and guidelines.",
+    renal: "Avoid or use caution in severe renal impairment due to cyclodextrin vehicle (SBECD) accumulation.",
+    hepatic: "Monitor LFTs; discontinue if significant ALT elevation with signs of hepatitis.",
+    duration: "Usually 3–5 days; up to 10 days in select severe cases as per protocol.",
+    monitoring: "LFTs, renal function, infusion reactions.",
+    warnings: "Limited pediatric data in some age groups; follow national/institutional COVID-19 protocols.",
+    ams: "Use only for moderate–severe COVID-19 with clear indications per current guidelines.",
+    weightBased: true,
+    mgPerKgDose: 5,
+    restricted: true
+  },
+  "Valganciclovir": {
+    spectrum: "Oral prodrug of ganciclovir; active against CMV and some other herpesviruses.",
+    dosing: "Dose based on body surface area and renal function; typical: 7×BSA×CrCl (mL/min) mg once daily (max adult dose). Use institution-specific calculator.",
+    renal: "Strong dose adjustment required in renal impairment.",
+    hepatic: "Use with caution; monitor LFTs.",
+    duration: "May be prolonged (weeks–months) for CMV disease or prophylaxis.",
+    monitoring: "CBC (neutropenia, anemia, thrombocytopenia), renal function, LFTs.",
+    warnings: "Myelosuppression is common; avoid combination with other myelotoxic drugs if possible.",
+    ams: "Reserve for proven/suspected CMV disease or prophylaxis in high-risk populations.",
+    weightBased: false,
+    mgPerKgDose: 0,
+    restricted: true
+  },
+  "Vancomycin": {
+    spectrum: "Glycopeptide active against Gram-positive bacteria including MRSA and many resistant pneumococci.",
+    dosing: "10–15 mg/kg/dose IV q6h (max usually 60 mg/kg/day; per-dose cap often 1 g) adjusted using therapeutic drug monitoring.",
+    renal: "Dose and interval adjusted based on eGFR and drug levels (AUC or trough).",
+    hepatic: "No routine adjustment; monitor in severe hepatic disease.",
+    duration: "Varies widely (e.g., 7–14 days for bacteremia; longer for osteomyelitis or endocarditis).",
+    monitoring: "Drug levels (AUC/trough), renal function, CBC, infusion reactions (Red man syndrome).",
+    warnings: "Nephrotoxicity risk increased with high troughs and concurrent nephrotoxins; infuse slowly.",
+    ams: "Reserve for MRSA or resistant Gram-positive infections; de-escalate to β-lactams if susceptible.",
+    weightBased: true,
+    mgPerKgDose: 15,
+    restricted: true
+  },
+  "Voriconazole": {
+    spectrum: "Triazole antifungal active against Aspergillus spp., many molds, and some yeasts; variable activity vs Mucorales.",
+    dosing: "9 mg/kg/dose IV/PO q12h for 2 doses, then 8 mg/kg/dose q12h (max adult doses) in children <12 years; older children often use adult dosing.",
+    renal: "IV formulation contains SBECD; avoid in severe renal impairment; oral preferred.",
+    hepatic: "Reduce maintenance dose in mild–moderate hepatic impairment; avoid or monitor closely in severe impairment.",
+    duration: "Often prolonged (weeks–months) depending on invasive fungal disease.",
+    monitoring: "Trough drug levels (if available), LFTs, visual disturbances, photosensitivity, QT interval.",
+    warnings: "Significant variability in levels; risk of hepatotoxicity, photosensitivity, skin cancer with long-term use.",
+    ams: "Reserve for proven/probable invasive mold infections or high-risk scenarios per ID guidance.",
+    weightBased: true,
+    mgPerKgDose: 8,
+    restricted: true
+  },
+
+  // ========== MONITORED ==========
+  "Amikacin": {
+    spectrum: "Aminoglycoside with strong Gram-negative activity including Pseudomonas; limited Gram-positive synergy.",
+    dosing: "15–20 mg/kg/dose IV/IM q24h (extended-interval dosing) or 7.5 mg/kg/dose q12h depending on age and protocol.",
+    renal: "Adjust dosing interval and monitor levels closely in renal impairment.",
+    hepatic: "No routine adjustment; toxicity is primarily renal and otic.",
+    duration: "Usually 5–7 days when combined with other agents; longer courses require close toxicity monitoring.",
+    monitoring: "Drug levels (peak/trough or AUC), renal function, audiology if prolonged therapy.",
+    warnings: "Nephrotoxicity and ototoxicity risks; avoid concurrent other nephrotoxins when possible.",
+    ams: "Use for serious Gram-negative infections when indicated, then de-escalate promptly.",
+    weightBased: true,
+    mgPerKgDose: 15,
+    restricted: false
+  },
+  "Cefotaxime": {
+    spectrum: "Third-generation cephalosporin with broad Gram-negative and some Gram-positive coverage; limited Pseudomonas activity.",
+    dosing: "50 mg/kg/dose IV q6–8h (max 2 g/dose), up to 200 mg/kg/day depending on severity.",
+    renal: "Adjust dose/interval in significant renal impairment.",
+    hepatic: "Generally no dose adjustment; monitor in severe hepatic disease.",
+    duration: "Often 7–10 days for pneumonia, longer for meningitis or deep-seated infections.",
+    monitoring: "Renal function, CBC, clinical response.",
+    warnings: "Risk of C. difficile colitis with prolonged use; biliary sludging less common than ceftriaxone.",
+    ams: "Use for empiric or targeted therapy per local guidelines; step down or narrow when culture results available.",
+    weightBased: true,
+    mgPerKgDose: 50,
+    restricted: false
+  },
+  "Ceftriaxone": {
+    spectrum: "Third-generation cephalosporin with broad Gram-negative and some Gram-positive coverage; no Pseudomonas.",
+    dosing: "50–75 mg/kg/day IV/IM once daily (max 2 g/day; up to 4 g/day in some severe infections).",
+    renal: "Primarily biliary elimination; adjust only in severe combined renal and hepatic failure.",
+    hepatic: "Use cautiously in significant hepatic dysfunction; risk of biliary sludging.",
+    duration: "Usually 7–10 days; longer for meningitis or serious systemic infections.",
+    monitoring: "LFTs, CBC, biliary symptoms if prolonged therapy.",
+    warnings: "Avoid in neonates with hyperbilirubinemia; do not mix with calcium-containing IV solutions in neonates.",
+    ams: "Frequently overused; reserve for appropriate indications and de-escalate to narrower agents when possible.",
+    weightBased: true,
+    mgPerKgDose: 60,
+    restricted: false
+  },
+  "Ceftazidime": {
+    spectrum: "Third-generation cephalosporin with strong Gram-negative coverage including Pseudomonas; weaker Gram-positive coverage.",
+    dosing: "40–50 mg/kg/dose IV q8h (max 2 g/dose).",
+    renal: "Adjust dose/interval in renal impairment.",
+    hepatic: "No routine adjustment required.",
+    duration: "Usually 7–14 days depending on infection.",
+    monitoring: "Renal function, neurologic status in renal impairment.",
+    warnings: "Can promote selection of resistant Pseudomonas; avoid prolonged monotherapy when possible.",
+    ams: "Use for suspected or confirmed Pseudomonas infections when indicated; de-escalate when culture data available.",
+    weightBased: true,
+    mgPerKgDose: 50,
+    restricted: false
+  },
+  "Clindamycin": {
+    spectrum: "Lincosamide active against many Gram-positive cocci (including some MRSA) and anaerobes.",
+    dosing: "10–13 mg/kg/dose IV/PO q8h (max 600–900 mg IV/dose).",
+    renal: "No major adjustment; largely hepatic metabolism.",
+    hepatic: "Use caution and adjust dose/interval in severe hepatic impairment.",
+    duration: "Typically 5–10 days for skin/soft tissue; longer for osteomyelitis.",
+    monitoring: "GI tolerance, LFTs, clinical response.",
+    warnings: "High risk for C. difficile infection; counsel about diarrhea and follow up promptly.",
+    ams: "Reserve for clear indications (e.g., anaerobic coverage, MRSA with inducible clindamycin susceptibility).",
+    weightBased: true,
+    mgPerKgDose: 10,
+    restricted: false
+  },
+  "Fluconazole oral": {
+    spectrum: "Triazole antifungal active against Candida spp. (not C. krusei) and Cryptococcus spp.",
+    dosing: "6–12 mg/kg/day PO (max 400–800 mg/day depending on indication).",
+    renal: "Reduce maintenance dose by 50% if eGFR <50 mL/min/1.73m².",
+    hepatic: "Monitor LFTs; use with caution in significant hepatic disease.",
+    duration: "Depends on syndrome; at least 14 days after blood culture clearance for candidemia.",
+    monitoring: "LFTs, renal function, clinical response.",
+    warnings: "Hepatotoxicity possible; risk of drug interactions; potential for QT prolongation.",
+    ams: "Monitored antifungal for oral administration in pediatrics.",
+    weightBased: true,
+    mgPerKgDose: 12,
+    restricted: false
+  },
+  "Gentamicin": {
+    spectrum: "Aminoglycoside active against many Gram-negative bacilli; synergistic with β-lactams for some Gram-positive infections.",
+    dosing: "7.5 mg/kg/day IV/IM divided q8–24h, or 7–10 mg/kg q24h for extended-interval dosing depending on age and protocol.",
+    renal: "Adjust dose/interval and monitor levels closely in renal impairment.",
+    hepatic: "No primary hepatic adjustment; toxicity is renal/otic.",
+    duration: "Typically 5–7 days; longer courses need careful monitoring.",
+    monitoring: "Drug levels, renal function, audiology when prolonged therapy is anticipated.",
+    warnings: "Nephrotoxicity and ototoxicity; avoid concurrent nephrotoxins.",
+    ams: "Use for targeted Gram-negative coverage or synergy; avoid prolonged empiric use.",
+    weightBased: true,
+    mgPerKgDose: 7.5,
+    restricted: false
+  },
+  "Kanamycin": {
+    spectrum: "Aminoglycoside with Gram-negative and some Mycobacterium activity; now mainly used for MDR TB regimens in some settings.",
+    dosing: "15–30 mg/kg/day IV/IM in 1–2 divided doses for MDR TB, per national TB program recommendations.",
+    renal: "Adjust dose and interval in renal impairment; high nephro-/ototoxic risk.",
+    hepatic: "No direct adjustment; toxicity is renal/otic.",
+    duration: "Prolonged courses (months) for MDR TB as part of combination therapy.",
+    monitoring: "Renal function, audiology, vestibular function, drug levels if available.",
+    warnings: "High risk of permanent hearing loss and renal damage; use strictly under TB specialist guidance.",
+    ams: "Use only in MDR TB regimens per national or WHO guidelines.",
+    weightBased: true,
+    mgPerKgDose: 15,
+    restricted: false
+  },
+  "Neomycin": {
+    spectrum: "Aminoglycoside primarily used orally/topically for gut decontamination or local infections; minimal systemic use.",
+    dosing: "Oral dosing varies by indication (e.g., 25–50 mg/kg/day divided doses) for gut decontamination; avoid systemic absorption if possible.",
+    renal: "Risk of nephrotoxicity with systemic absorption; avoid in significant renal impairment.",
+    hepatic: "Used sometimes in hepatic encephalopathy protocols; monitor liver and renal function.",
+    duration: "Short courses preferred; prolonged use increases toxicity.",
+    monitoring: "Renal function, auditory function if systemic exposure suspected.",
+    warnings: "Significant nepho- and ototoxicity if absorbed systemically; use safer alternatives when available.",
+    ams: "Use limited, specific indications (e.g., pre-op bowel prep) and avoid chronic use.",
+    weightBased: false,
+    mgPerKgDose: 0,
+    restricted: false
+  },
+  "Piperacillin–Tazobactam": {
+    spectrum: "Extended-spectrum penicillin/β-lactamase inhibitor with coverage vs many Gram-negatives (including Pseudomonas), Gram-positives, and anaerobes.",
+    dosing: "80–100 mg/kg/dose (piperacillin component) IV q6–8h (max usual adult dose 4.5 g q6–8h).",
+    renal: "Adjust dose/interval in renal impairment.",
+    hepatic: "No routine adjustment; monitor in severe hepatic disease.",
+    duration: "Typically 5–14 days depending on source and response.",
+    monitoring: "Renal function, electrolytes, CBC; monitor for sodium load in large doses.",
+    warnings: "High sodium content; use caution in fluid-sensitive patients or those with renal/cardiac disease.",
+    ams: "Reserve for moderate–severe polymicrobial or Pseudomonas-risk infections; de-escalate based on cultures.",
+    weightBased: true,
+    mgPerKgDose: 90,
+    restricted: false
+  },
+  "Streptomycin": {
+    spectrum: "Aminoglycoside historically used for TB and some zoonoses (e.g., plague); limited current pediatric use.",
+    dosing: "15–20 mg/kg/day IM (max 1 g/day) for TB or other indications as per guidelines.",
+    renal: "Adjust dose in renal impairment; high nephro-/ototoxic risk.",
+    hepatic: "No direct adjustment; primary concern is renal/otic toxicity.",
+    duration: "Weeks–months in combination TB regimens; shorter in other infections.",
+    monitoring: "Renal function, audiology, vestibular function.",
+    warnings: "High risk of permanent hearing loss; use only when clearly indicated.",
+    ams: "Reserve for specific guideline-driven indications (e.g., certain TB regimens).",
+    weightBased: true,
+    mgPerKgDose: 15,
+    restricted: false
+  },
+  "Tobramycin": {
+    spectrum: "Aminoglycoside similar to gentamicin, with strong Gram-negative including Pseudomonas activity.",
+    dosing: "10–12 mg/kg IV q24h (extended-interval) or 2.5–3 mg/kg/dose q8h depending on protocol and age.",
+    renal: "Adjust dose/interval in renal impairment; monitor drug levels.",
+    hepatic: "No routine adjustment; toxicity is renal/otic.",
+    duration: "Commonly 5–7 days; longer courses need close monitoring.",
+    monitoring: "Drug levels, renal function, audiology when prolonged therapy used.",
+    warnings: "Nephrotoxicity and ototoxicity similar to other aminoglycosides.",
+    ams: "Used particularly for Pseudomonas infections (e.g., CF exacerbations) with de-escalation when possible.",
+    weightBased: true,
+    mgPerKgDose: 10,
+    restricted: false
+  }
+};
