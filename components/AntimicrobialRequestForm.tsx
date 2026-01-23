@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { DrugType, PrescriptionStatus, PreviousAntibiotic, Organism, Susceptibility } from '../types';
 import { IDS_SPECIALISTS_ADULT, IDS_SPECIALISTS_PEDIATRIC, WARDS, LOGO_URL } from '../constants';
@@ -24,6 +23,34 @@ const CLINICAL_DEPARTMENTS = [
   "Obstetrics and Gynecology",
   "Ophthalmology",
   "Physical and Rehabilitation Medicine"
+];
+
+const BASIS_OPTIONS = [
+  { 
+    id: 'CAI', 
+    label: 'Community-Acquired Infection', 
+    definition: 'Symptoms started ≤48 hours from admission (or present on admission).' 
+  },
+  { 
+    id: 'HAI', 
+    label: 'Healthcare-Associated Infection', 
+    definition: 'Symptoms start >48 hours after admission.' 
+  },
+  { 
+    id: 'SP', 
+    label: 'Surgical Prophylaxis', 
+    definition: 'Preventative use for surgical procedures.' 
+  },
+  { 
+    id: 'MP', 
+    label: 'Medical Prophylaxis', 
+    definition: 'Examples: long-term use to prevent UTIs, antifungals in chemotherapy patients, penicillin prophylaxis in asplenia, etc.' 
+  },
+  { 
+    id: 'Others', 
+    label: 'Others (Specify)', 
+    definition: 'Use for clinical scenarios not covered by the standard categories above.' 
+  }
 ];
 
 const calcCkdEpi2021 = (age: number, sex: string, scr: number) => {
@@ -89,7 +116,7 @@ interface PrevAbxRowProps {
 const PrevAbxRow: React.FC<PrevAbxRowProps> = ({ id, value, onChange, onRemove }) => (
   <div className="grid grid-cols-4 gap-2 items-center mb-1">
     <Input type="text" placeholder="Drug name" value={value.drug} onChange={(e) => onChange(id, 'drug', e.target.value)} />
-    <Input type="text" placeholder="Frequency" value={value.frequency} onChange={(e) => onChange(id, 'frequency', e.target.value)} />
+    <Input type="text" placeholder="Frequency" value={value.frequency} onChange={(id === 0 ? undefined : (e) => onChange(id, 'frequency', e.target.value))} />
     <Input type="text" placeholder="Duration" value={value.duration} onChange={(e) => onChange(id, 'duration', e.target.value)} />
     <button type="button" onClick={() => onRemove(id)} className="text-red-400 hover:text-red-600 p-1.5 rounded-full hover:bg-red-50 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
   </div>
@@ -158,7 +185,11 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     antimicrobial: '', drug_type: DrugType.MONITORED as DrugType, dose: '', frequency: '', duration: '',
     route: 'IV',
     route_other: '',
-    indication: '', basis_indication: '', selectedIndicationType: '' as 'Empiric' | 'Prophylactic' | 'Therapeutic' | '',
+    indication: '', 
+    basis_indication: '', // Combined final string
+    selectedBasisCategory: '', // New internal field
+    basis_indication_details: '', // New internal field
+    selectedIndicationType: '' as 'Empiric' | 'Prophylactic' | 'Therapeutic' | '',
     specimen: '',
     resident_name: '', clinical_dept: '', service_resident_name: '', id_specialist: '',
   });
@@ -194,6 +225,16 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
 
   useEffect(() => {
     if (initialData) {
+      // Parse basis_indication if possible
+      let category = '';
+      let details = initialData.basis_indication || '';
+      
+      const foundOption = BASIS_OPTIONS.find(opt => details.startsWith(opt.label));
+      if (foundOption) {
+        category = foundOption.label;
+        details = details.replace(category + ': ', '').replace(category, '').trim();
+      }
+
       setFormData({
         ...initialData,
         req_date: initialData.req_date ? initialData.req_date.split('T')[0] : getTodayDate(),
@@ -202,7 +243,9 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
         mode: initialData.mode || 'adult',
         patient_dob: initialData.patient_dob || '',
         route: initialData.route || 'IV',
-        route_other: initialData.route_other || ''
+        route_other: initialData.route_other || '',
+        selectedBasisCategory: category,
+        basis_indication_details: details
       });
 
       if (initialData.scr_mgdl === "Pending") setScrNotAvailable(true);
@@ -432,8 +475,8 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     const errors: Record<string, string> = {};
     const requiredFields: (keyof typeof formData)[] = [
       'patient_name', 'age', 'sex', 'weight_kg', 'hospital_number', 'ward', 'diagnosis',
-      'antimicrobial', 'dose', 'frequency', 'duration', 'route', 'selectedIndicationType', 'basis_indication',
-      'resident_name', 'clinical_dept', 'req_date'
+      'antimicrobial', 'dose', 'frequency', 'duration', 'route', 'selectedIndicationType',
+      'resident_name', 'clinical_dept', 'req_date', 'selectedBasisCategory'
     ];
 
     requiredFields.forEach(field => {
@@ -441,6 +484,10 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
         errors[field as string] = `${String(field).replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} is required.`;
       }
     });
+
+    if (formData.selectedBasisCategory === 'Others (Specify)' && !formData.basis_indication_details.trim()) {
+      errors.basis_indication_details = 'Please specify the clinical justification.';
+    }
 
     // CLINICAL VALIDATION: Adult Age Check
     if (patientMode === 'adult' && formData.age) {
@@ -501,12 +548,15 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
   };
 
   const confirmAndSubmit = async () => {
+    const finalBasis = `${formData.selectedBasisCategory}${formData.basis_indication_details ? ': ' + formData.basis_indication_details : ''}`;
+
     const payload: any = {
       ...formData,
       req_date: new Date(formData.req_date).toISOString(),
       timestamp: new Date().toISOString(),
       scr_mgdl: scrNotAvailable ? "Pending" : formData.scr_mgdl,
       indication: formData.selectedIndicationType,
+      basis_indication: finalBasis,
       route: formData.route === 'Others' ? formData.route_other : formData.route,
       previous_antibiotics: prevAbxRows
         .filter(r => r.drug || r.frequency || r.duration)
@@ -530,6 +580,8 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     };
 
     delete payload.selectedIndicationType;
+    delete payload.selectedBasisCategory;
+    delete payload.basis_indication_details;
 
     Object.keys(payload).forEach(key => {
       if (payload[key] === '' || payload[key] === null || payload[key] === undefined) {
@@ -575,7 +627,9 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
       route: 'IV',
       route_other: '',
       indication: 'Therapeutic',
-      basis_indication: 'Fever, cough, rales on physical exam, new infiltrate on CXR',
+      basis_indication: '',
+      selectedBasisCategory: 'Community-Acquired Infection',
+      basis_indication_details: 'Fever, cough, rales on physical exam, new infiltrate on CXR',
       selectedIndicationType: 'Therapeutic',
       specimen: 'Sputum',
       resident_name: 'Dr. Sample Resident',
@@ -631,6 +685,11 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
       <p className="text-sm text-gray-800 font-bold leading-snug">{value || '—'}</p>
     </div>
   );
+
+  const selectedBasisDefinition = useMemo(() => {
+    const opt = BASIS_OPTIONS.find(o => o.label === formData.selectedBasisCategory);
+    return opt ? opt.definition : '';
+  }, [formData.selectedBasisCategory]);
 
   if (!isOpen) return null;
 
@@ -712,7 +771,43 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                                 ))}
                              </div>
                         </FormGroup>
-                        <FormGroup label="Basis for Indication" className="md:col-span-2" error={validationErrors.basis_indication}><Textarea id="basis_indication" error={!!validationErrors.basis_indication} name="basis_indication" value={formData.basis_indication} onChange={handleChange} rows={2} /></FormGroup>
+                        
+                        <FormGroup label="Basis for Indication" className="md:col-span-2" error={validationErrors.selectedBasisCategory}>
+                            <Select 
+                                id="selectedBasisCategory" 
+                                error={!!validationErrors.selectedBasisCategory} 
+                                name="selectedBasisCategory" 
+                                value={formData.selectedBasisCategory} 
+                                onChange={handleChange}
+                            >
+                                <option value="">Select Basis Category...</option>
+                                {BASIS_OPTIONS.map(opt => (
+                                    <option key={opt.id} value={opt.label}>{opt.label}</option>
+                                ))}
+                            </Select>
+                            
+                            {formData.selectedBasisCategory && (
+                                <div className="mt-3 animate-fade-in">
+                                    {/* Definition Callout */}
+                                    <div className="bg-blue-50 border-l-4 border-blue-400 p-3 mb-4 rounded-r-lg shadow-sm">
+                                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">Definition</p>
+                                        <p className="text-xs text-blue-800 font-medium leading-relaxed italic">{selectedBasisDefinition}</p>
+                                    </div>
+
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-tight mb-1 block">Clinical Justification / Remarks</label>
+                                    <Textarea 
+                                        id="basis_indication_details"
+                                        error={!!validationErrors.basis_indication_details}
+                                        name="basis_indication_details" 
+                                        value={formData.basis_indication_details} 
+                                        onChange={handleChange} 
+                                        rows={3} 
+                                        placeholder="Specify symptoms, lab results, or specific reason for prophylaxis..."
+                                    />
+                                    {validationErrors.basis_indication_details && <p className="text-[10px] text-red-500 font-bold mt-1">{validationErrors.basis_indication_details}</p>}
+                                </div>
+                            )}
+                        </FormGroup>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
                         <FormGroup label="Serum Creatinine (µmol/L)" error={validationErrors.scr_mgdl}>
@@ -867,6 +962,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                                 </div>
                                 <div className="space-y-6">
                                     <SummaryValue label="DIAGNOSIS" value={formData.diagnosis} />
+                                    <SummaryValue label="BASIS FOR INDICATION" value={`${formData.selectedBasisCategory}${formData.basis_indication_details ? ': ' + formData.basis_indication_details : ''}`} />
                                     <div className="grid grid-cols-3 gap-2 pt-4 border-t border-gray-50">
                                         <SummaryValue label="SCR" value={scrNotAvailable ? 'PENDING' : formData.scr_mgdl} />
                                         <SummaryValue label="SGPT" value={formData.sgpt} />
@@ -933,7 +1029,6 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                                     </div>
                                 </div>
                                 <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-8 pt-6 border-t border-blue-200/50">
-                                    <SummaryValue label="BASIS FOR INDICATION" value={formData.basis_indication} />
                                     <div className="flex gap-8">
                                         <SummaryValue label="RESIDENT IN-CHARGE" value={formData.resident_name} />
                                         {formData.id_specialist && <SummaryValue label="IDS CONSULTANT" value={formData.id_specialist} />}
