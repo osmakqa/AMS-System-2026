@@ -153,6 +153,8 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     mode: 'adult' as 'adult' | 'pediatric',
     diagnosis: '', sgpt: '', scr_mgdl: '', egfr_text: '',
     antimicrobial: '', drug_type: DrugType.MONITORED as DrugType, dose: '', frequency: '', duration: '',
+    route: 'IV', // Added Route
+    route_other: '', // For "Others (Specify)"
     indication: '', basis_indication: '', selectedIndicationType: '' as 'Empiric' | 'Prophylactic' | 'Therapeutic' | '',
     specimen: '',
     resident_name: '', clinical_dept: '', service_resident_name: '', id_specialist: '',
@@ -195,7 +197,9 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
         selectedIndicationType: (initialData.indication as any) || '',
         scr_mgdl: initialData.scr_mgdl === "Pending" ? "" : initialData.scr_mgdl,
         mode: initialData.mode || 'adult',
-        patient_dob: initialData.patient_dob || ''
+        patient_dob: initialData.patient_dob || '',
+        route: initialData.route || 'IV',
+        route_other: initialData.route_other || ''
       });
 
       if (initialData.scr_mgdl === "Pending") setScrNotAvailable(true);
@@ -265,13 +269,37 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
   }, [formData.patient_dob, formData.req_date, patientMode]);
 
   const drugLists = useMemo(() => {
-    const adultList = Object.entries(ADULT_MONOGRAPHS).map(([drugKey, meta]) => ({
-      value: drugKey, label: drugKey, type: meta.restricted ? DrugType.RESTRICTED : DrugType.MONITORED, weightBased: meta.weightBased
-    })).sort((a, b) => a.label.localeCompare(b.label));
-    const pediatricList = Object.entries(PEDIATRIC_MONOGRAPHS).map(([drugKey, meta]) => ({
-      value: drugKey, label: drugKey, type: meta.restricted ? DrugType.RESTRICTED : DrugType.MONITORED
-    })).sort((a, b) => a.label.localeCompare(b.label));
-    return { adult: adultList, pediatric: pediatricList };
+    // Helper to process monographs and consolidate Fluconazole
+    const processList = (monographs: Record<string, any>) => {
+        const list: any[] = [];
+        const seenFluconazole = new Set();
+
+        Object.entries(monographs).forEach(([drugKey, meta]) => {
+            let label = drugKey;
+            let value = drugKey;
+            
+            // Consolidate Fluconazole entries for the dropdown
+            if (drugKey.toLowerCase().includes('fluconazole')) {
+                if (seenFluconazole.has('fluconazole')) return;
+                label = 'Fluconazole';
+                value = 'Fluconazole';
+                seenFluconazole.add('fluconazole');
+            }
+
+            list.push({
+                value: value,
+                label: label,
+                type: meta.restricted ? DrugType.RESTRICTED : DrugType.MONITORED,
+                weightBased: meta.weightBased
+            });
+        });
+        return list.sort((a, b) => a.label.localeCompare(b.label));
+    };
+
+    return { 
+        adult: processList(ADULT_MONOGRAPHS), 
+        pediatric: processList(PEDIATRIC_MONOGRAPHS) 
+    };
   }, []);
 
   useEffect(() => {
@@ -281,9 +309,16 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
         if (isActive) setRenalAnalysis(null);
         return;
       }
+      
+      // Determine which monograph key to use for Renal check
+      let lookupKey = formData.antimicrobial;
+      if (lookupKey === 'Fluconazole') {
+          lookupKey = formData.route === 'IV' ? 'Fluconazole IV' : 'Fluconazole oral';
+      }
+
       const monograph = patientMode === 'adult'
-        ? ADULT_MONOGRAPHS[formData.antimicrobial]
-        : PEDIATRIC_MONOGRAPHS[formData.antimicrobial];
+        ? ADULT_MONOGRAPHS[lookupKey]
+        : PEDIATRIC_MONOGRAPHS[lookupKey];
 
       if (!monograph || !monograph.renal) {
         if (isActive) setRenalAnalysis(null);
@@ -309,27 +344,41 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     };
     const timeoutId = setTimeout(runRenalCheck, 1500);
     return () => { isActive = false; clearTimeout(timeoutId); };
-  }, [formData.egfr_text, formData.antimicrobial, patientMode, formData.dose, formData.frequency]);
+  }, [formData.egfr_text, formData.antimicrobial, patientMode, formData.dose, formData.frequency, formData.route]);
 
   useEffect(() => {
     const currentDrug = formData.antimicrobial;
     const drugOptions = drugLists[patientMode];
     const selectedDrugMeta = drugOptions.find(d => d.value === currentDrug);
 
+    let drugType = selectedDrugMeta ? (selectedDrugMeta.type || DrugType.MONITORED) : DrugType.MONITORED;
+    
+    // CUSTOM FLUCONAZOLE LOGIC
+    if (currentDrug === 'Fluconazole') {
+        // IV is Restricted, Oral (or any other) is Monitored
+        drugType = formData.route === 'IV' ? DrugType.RESTRICTED : DrugType.MONITORED;
+    }
+
     setFormData(prev => ({
       ...prev,
-      drug_type: selectedDrugMeta ? (selectedDrugMeta.type || DrugType.MONITORED) : DrugType.MONITORED,
-      service_resident_name: selectedDrugMeta?.type === DrugType.RESTRICTED ? prev.service_resident_name : '',
-      id_specialist: selectedDrugMeta?.type === DrugType.RESTRICTED ? prev.id_specialist : '',
+      drug_type: drugType,
+      service_resident_name: drugType === DrugType.RESTRICTED ? prev.service_resident_name : '',
+      id_specialist: drugType === DrugType.RESTRICTED ? prev.id_specialist : '',
     }));
 
     if (!selectedDrugMeta) {
       setMonographHtml(currentDrug ? `<p class="text-gray-700"><strong>${currentDrug}</strong>: No monograph found.</p>` : '<p class="text-gray-600">Select an antimicrobial to view its monograph.</p>');
       return;
     }
-    const monograph = patientMode === 'adult' ? ADULT_MONOGRAPHS[selectedDrugMeta.value] : PEDIATRIC_MONOGRAPHS[selectedDrugMeta.value];
+    
+    let lookupKey = currentDrug;
+    if (currentDrug === 'Fluconazole') {
+        lookupKey = formData.route === 'IV' ? 'Fluconazole IV' : 'Fluconazole oral';
+    }
+
+    const monograph = patientMode === 'adult' ? ADULT_MONOGRAPHS[lookupKey] : PEDIATRIC_MONOGRAPHS[lookupKey];
     if (monograph) {
-      let html = `<h3 class="font-bold text-gray-800 text-lg mb-2">${selectedDrugMeta.value} – ${patientMode === "adult" ? "Adult" : "Pediatric"} Monograph</h3>`;
+      let html = `<h3 class="font-bold text-gray-800 text-lg mb-2">${lookupKey} – ${patientMode === "adult" ? "Adult" : "Pediatric"} Monograph</h3>`;
       if (monograph.spectrum) html += `<p class="mb-1 text-gray-700"><strong class="text-gray-900">Spectrum:</strong> ${monograph.spectrum}</p>`;
       if (monograph.dosing) html += `<p class="mb-1 text-gray-700"><strong class="text-gray-900">Dosing:</strong> ${monograph.dosing}</p>`;
       if (monograph.renal) html += `<p class="mb-1 text-gray-700"><strong class="text-gray-900">Renal adj:</strong> ${monograph.renal}</p>`;
@@ -342,7 +391,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     } else {
       setMonographHtml(currentDrug ? `<p class="text-gray-700"><strong>${currentDrug}</strong>: No monograph found.</p>` : '<p class="text-gray-600">Select an antimicrobial to view its monograph.</p>');
     }
-  }, [patientMode, formData.antimicrobial, drugLists]);
+  }, [patientMode, formData.antimicrobial, drugLists, formData.route]);
 
   useEffect(() => {
     updateEgfr();
@@ -382,7 +431,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     const errors: Record<string, string> = {};
     const requiredFields: (keyof typeof formData)[] = [
       'patient_name', 'age', 'sex', 'weight_kg', 'hospital_number', 'ward', 'diagnosis',
-      'antimicrobial', 'dose', 'frequency', 'duration', 'selectedIndicationType', 'basis_indication',
+      'antimicrobial', 'dose', 'frequency', 'duration', 'route', 'selectedIndicationType', 'basis_indication',
       'resident_name', 'clinical_dept', 'req_date'
     ];
 
@@ -391,6 +440,10 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
         errors[field as string] = `${String(field).replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} is required.`;
       }
     });
+
+    if (formData.route === 'Others' && !formData.route_other) {
+        errors.route_other = 'Please specify the custom route.';
+    }
 
     if (patientMode === 'pediatric' && !formData.patient_dob) {
         errors.patient_dob = 'Date of Birth is required for pediatric patients.';
@@ -405,7 +458,14 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     }
 
     const selectedDrugMeta = drugLists[patientMode].find(d => d.value === formData.antimicrobial);
-    if (selectedDrugMeta && selectedDrugMeta.type === DrugType.RESTRICTED) {
+    
+    // Check if it should be restricted based on logic or base type
+    let isRestricted = selectedDrugMeta?.type === DrugType.RESTRICTED;
+    if (formData.antimicrobial === 'Fluconazole') {
+        isRestricted = formData.route === 'IV';
+    }
+
+    if (isRestricted) {
       if (!formData.service_resident_name || String(formData.service_resident_name).trim() === '') {
         errors.service_resident_name = 'Service Resident is required for restricted antimicrobials.';
       }
@@ -437,6 +497,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
       timestamp: new Date().toISOString(),
       scr_mgdl: scrNotAvailable ? "Pending" : formData.scr_mgdl,
       indication: formData.selectedIndicationType,
+      route: formData.route === 'Others' ? formData.route_other : formData.route,
       previous_antibiotics: prevAbxRows
         .filter(r => r.drug || r.frequency || r.duration)
         .map(({ drug, frequency, duration }) => ({ drug, frequency, duration })),
@@ -501,6 +562,8 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
       dose: '1g',
       frequency: 'q8h',
       duration: '7',
+      route: 'IV',
+      route_other: '',
       indication: 'Therapeutic',
       basis_indication: 'Fever, cough, rales on physical exam, new infiltrate on CXR',
       selectedIndicationType: 'Therapeutic',
@@ -703,6 +766,22 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                             </Select>
                         </FormGroup>
                         <FormGroup label="Drug Type"><div className={`h-[38px] flex items-center justify-center px-3 rounded-lg text-xs font-black uppercase tracking-widest border ${formData.drug_type === DrugType.RESTRICTED ? 'bg-red-50 border-red-200 text-red-700' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>{formData.drug_type}</div></FormGroup>
+                        
+                        <FormGroup label="Route">
+                            <Select error={!!validationErrors.route} name="route" value={formData.route} onChange={handleChange}>
+                                <option value="IV">IV</option>
+                                <option value="IM">IM</option>
+                                <option value="Oral">Oral</option>
+                                <option value="Others">Others (Specify)</option>
+                            </Select>
+                        </FormGroup>
+                        {formData.route === 'Others' && (
+                            /* Fixed: Removed unsupported 'error' prop from FormGroup */
+                            <FormGroup label="Specify Route">
+                                <Input error={!!validationErrors.route_other} name="route_other" value={formData.route_other} onChange={handleChange} placeholder="Enter route..." />
+                            </FormGroup>
+                        )}
+                        
                         <FormGroup label="Dose"><Input error={!!validationErrors.dose} name="dose" value={formData.dose} onChange={handleChange} placeholder="e.g. 1g" /></FormGroup>
                         <FormGroup label="Frequency"><Input error={!!validationErrors.frequency} name="frequency" value={formData.frequency} onChange={handleChange} placeholder="e.g. q8h" /></FormGroup>
                         <FormGroup label="Duration (Days)"><Input error={!!validationErrors.duration} name="duration" value={formData.duration} onChange={handleChange} placeholder="e.g. 7" /></FormGroup>
@@ -832,6 +911,10 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                                         <div className="flex items-center gap-3">
                                             <h2 className="text-3xl font-black text-blue-900 tracking-tight">{formData.antimicrobial}</h2>
                                             <span className={`px-3 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-widest ${formData.drug_type === DrugType.RESTRICTED ? 'bg-red-100 text-red-700 border-red-200' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>{formData.drug_type}</span>
+                                        </div>
+                                        <div className="mt-2">
+                                            <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Route: </span>
+                                            <span className="text-sm font-bold text-blue-800">{formData.route === 'Others' ? formData.route_other : formData.route}</span>
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-3 gap-8 text-right">

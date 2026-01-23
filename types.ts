@@ -1,5 +1,4 @@
 
-
 export enum UserRole {
   PHARMACIST = 'PHARMACIST',
   IDS = 'IDS',
@@ -95,6 +94,7 @@ export interface Prescription {
   dose?: string;
   frequency?: string;
   duration?: string;
+  route?: string;
   
   indication?: string;
   basis_indication?: string;
