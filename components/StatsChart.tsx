@@ -4,14 +4,15 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
   PieChart, Pie, Cell
 } from 'recharts';
-import { Prescription, PrescriptionStatus, DrugType, AMSAudit } from '../types';
+import { Prescription, PrescriptionStatus, DrugType, AMSAudit, MonitoringPatient, AdminLogEntry } from '../types';
 import ChartDetailModal from './ChartDetailModal';
 import { IDS_SPECIALISTS, PHARMACISTS } from '../constants';
 
 interface StatsChartProps {
   data: Prescription[];
   allData: Prescription[];
-  auditData?: AMSAudit[]; // Added auditData prop
+  auditData?: AMSAudit[]; 
+  monitoringData?: MonitoringPatient[];
   role?: string;
   selectedMonth: number;
   onMonthChange: (month: number) => void;
@@ -34,6 +35,12 @@ const formatDuration = (ms: number) => {
   return `${(hours / 24).toFixed(1)} days`;
 };
 
+const normalizeLogEntry = (entry: string | AdminLogEntry | null): AdminLogEntry | null => {
+    if (!entry) return null;
+    if (typeof entry === 'string') return { time: entry, status: 'Given' };
+    return entry;
+};
+
 // --- Reusable UI Components ---
 const ChartWrapper = ({ title, children, onClick }: { title: string, children?: React.ReactNode, onClick?: () => void }) => (
   <div 
@@ -48,8 +55,8 @@ const ChartWrapper = ({ title, children, onClick }: { title: string, children?: 
 const KpiCard = ({ title, value, subValue, icon, color, onClick }: { title: string, value: string | number, subValue?: string, icon: React.ReactNode, color: string, onClick?: () => void }) => (
   <div className={`bg-white p-5 rounded-xl shadow-lg border border-gray-200 flex items-center gap-5 transition-all duration-300 ${onClick ? 'cursor-pointer hover:shadow-2xl hover:border-green-300 hover:-translate-y-1' : ''}`} onClick={onClick}>
     <div className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center ${color}`}>{icon}</div>
-    <div>
-      <p className="text-2xl font-bold text-gray-800">{value}</p>
+    <div className="overflow-hidden">
+      <p className="text-2xl font-bold text-gray-800 truncate">{value}</p>
       <p className="text-sm text-gray-500 font-medium">{title}</p>
       {subValue && <p className="text-xs text-gray-400 mt-1">{subValue}</p>}
     </div>
@@ -120,13 +127,74 @@ const FilterControls = ({ selectedMonth, onMonthChange, selectedYear, onYearChan
 
 
 // --- Main Component ---
-const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], role, selectedMonth, onMonthChange, selectedYear, onYearChange }) => {
+const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], monitoringData = [], role, selectedMonth, onMonthChange, selectedYear, onYearChange }) => {
   const [activeTab, setActiveTab] = useState('General');
   const [modeFilter, setModeFilter] = useState<'All' | 'adult' | 'pediatric'>('All');
   const [modalConfig, setModalConfig] = useState<{ isOpen: boolean; data: Prescription[]; title: string }>({ isOpen: false, data: [], title: '' });
   
   const handleModalClose = () => setModalConfig({ isOpen: false, data: [], title: '' });
   
+  const filteredMonitoringData = useMemo(() => {
+    return monitoringData.filter(item => {
+        const d = item.created_at ? new Date(item.created_at) : new Date();
+        const mMatch = selectedMonth === -1 || d.getMonth() === selectedMonth;
+        const yMatch = selectedYear === 0 || d.getFullYear() === selectedYear;
+        return mMatch && yMatch;
+    });
+  }, [monitoringData, selectedMonth, selectedYear]);
+
+  const processedMonitoring = useMemo(() => {
+    const activePatients = filteredMonitoringData.filter(p => p.status === 'Admitted');
+    const allTherapies = filteredMonitoringData.flatMap(p => p.antimicrobials || []);
+    const activeTherapies = allTherapies.filter(t => t.status === 'Active');
+    
+    // Outcomes breakdown
+    const outcomes = [
+        { name: 'Active', value: allTherapies.filter(t => t.status === 'Active').length },
+        { name: 'Completed', value: allTherapies.filter(t => t.status === 'Completed').length },
+        { name: 'Stopped', value: allTherapies.filter(t => t.status === 'Stopped').length },
+        { name: 'Shifted', value: allTherapies.filter(t => t.status === 'Shifted').length },
+    ];
+
+    // Missed dose reason analysis
+    const missedReasonsMap = new Map<string, number>();
+    let totalMissed = 0;
+    allTherapies.forEach(drug => {
+        Object.values(drug.administration_log || {}).forEach((dayDoses: any[]) => {
+            dayDoses.forEach(entry => {
+                const e = normalizeLogEntry(entry);
+                if (e?.status === 'Missed') {
+                    totalMissed++;
+                    const reason = e.reason || 'Not Specified';
+                    missedReasonsMap.set(reason, (missedReasonsMap.get(reason) || 0) + 1);
+                }
+            });
+        });
+    });
+    
+    const missedReasons = Array.from(missedReasonsMap.entries())
+        .map(([name, value]) => ({ name, value }))
+        .sort((a,b) => b.value - a.value);
+
+    // Days on Therapy (DOT) distribution
+    const dotData: number[] = activeTherapies.map(t => {
+        const start = new Date(t.start_date);
+        const diff = Date.now() - start.getTime();
+        return Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+    });
+    const avgDot = dotData.length > 0 ? (dotData.reduce((a,b) => a+b, 0) / dotData.length).toFixed(1) : '0';
+
+    return {
+        activePatients: activePatients.length,
+        totalMissed,
+        completedCount: allTherapies.filter(t => t.status === 'Completed').length,
+        avgDot,
+        outcomes,
+        missedReasons,
+        topMonitoringDrugs: getTopN(allTherapies.map(t => t.drug_name), 5)
+    };
+  }, [filteredMonitoringData]);
+
   const modeFilteredData = useMemo(() => {
     let filtered = data;
     
@@ -214,20 +282,19 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
     const pharmacistTimes = source
       .filter(i => i.dispensed_date && i.created_at)
       .map(i => new Date(i.dispensed_date!).getTime() - new Date(i.created_at!).getTime())
-      .filter(time => !isNaN(time) && time >= 0) as number[]; // Ensure it's an array of numbers
+      .filter(time => !isNaN(time) && time >= 0) as number[]; 
 
     const avgPharmacistTime = pharmacistTimes.length > 0 ? formatDuration((pharmacistTimes as number[]).reduce((a, b) => a + b, 0) / (pharmacistTimes as number[]).length) : 'N/A';
     
     const pharmacistDecisions = [
         { name: 'Approved', value: pharmacyHandled.filter(p => p.status === PrescriptionStatus.APPROVED).length },
-        { name: 'Disapproved', value: pharmacyHandled.filter(p => p.status === PrescriptionStatus.DISAPPROVED && !p.ids_disapproved_at).length }, // Disapproved by RPh, not IDS
+        { name: 'Disapproved', value: pharmacyHandled.filter(p => p.status === PrescriptionStatus.DISAPPROVED && !p.ids_disapproved_at).length }, 
         { name: 'Forwarded', value: pharmacyHandled.filter(p => p.status === PrescriptionStatus.FOR_IDS_APPROVAL || (p.drug_type === DrugType.RESTRICTED && (p.ids_approved_at || p.ids_disapproved_at))).length },
     ];
     
     // IDS
     const idsConsults = source.filter(i => (i.ids_approved_at || i.ids_disapproved_at) && i.dispensed_date);
     
-    // Filter out NaN results from getTime()
     const idsTimes = idsConsults
       .map(i => {
         const approvedTime = i.ids_approved_at ? new Date(i.ids_approved_at).getTime() : NaN;
@@ -238,7 +305,7 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
         if (!isNaN(disapprovedTime) && !isNaN(dispensedTime)) return disapprovedTime - dispensedTime;
         return NaN;
       })
-      .filter(time => !isNaN(time) && time >= 0) as number[]; // Ensure it's an array of valid numbers
+      .filter(time => !isNaN(time) && time >= 0) as number[]; 
 
     const avgIdsTime = idsTimes.length > 0 ? formatDuration((idsTimes as number[]).reduce((a, b) => a + b, 0) / (idsTimes as number[]).length) : 'N/A';
     const idsOutcomes = [
@@ -246,7 +313,6 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
       { name: 'Disapproved', value: idsHandled.filter(i => i.status === PrescriptionStatus.DISAPPROVED).length }
     ];
     
-    // ... interventionStats logic ...
     const getFindingsDistribution = (items: Prescription[]) => {
         const counts: Record<string, number> = {};
         items.forEach(item => {
@@ -262,7 +328,7 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
     const interventionStats = getFindingsDistribution(source);
 
     const avgTimePerIds = Object.entries((idsConsults as Prescription[]).reduce((acc: Record<string, number[]>, curr: Prescription) => {
-        if (curr.id_specialist) { // Use id_specialist here
+        if (curr.id_specialist) { 
             const approvedTime = curr.ids_approved_at ? new Date(curr.ids_approved_at).getTime() : NaN;
             const disapprovedTime = curr.ids_disapproved_at ? new Date(curr.ids_disapproved_at).getTime() : NaN;
             const dispensedTime = curr.dispensed_date ? new Date(curr.dispensed_date).getTime() : NaN;
@@ -305,14 +371,14 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
       },
       pharmacy: {
         totalHandled: pharmacyHandled.length, avgPharmacistTime,
-        topPharmacists: getTopN(pharmacyHandled.map(p => p.dispensed_by), 5), // Fix: Use dispensed_by
+        topPharmacists: getTopN(pharmacyHandled.map(p => p.dispensed_by), 5), 
         decisions: pharmacistDecisions,
         interventionStats, 
       },
       ids: {
         totalConsults: idsHandled.length, avgIdsTime,
         approvalRate: (idsOutcomes[0].value / (idsOutcomes[0].value + idsOutcomes[1].value) * 100 || 0).toFixed(1) + '%',
-        topConsultants: getTopN(idsHandled.map(p => p.id_specialist), 5), // Fix: Use id_specialist
+        topConsultants: getTopN(idsHandled.map(p => p.id_specialist), 5), 
         outcomes: idsOutcomes,
         avgTimePerConsultant: avgTimePerIds
       }
@@ -323,6 +389,43 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
 
   const renderDashboard = () => {
     switch(activeTab) {
+      case 'AMS Monitoring':
+        const mon = processedMonitoring;
+        return <div className="space-y-6 animate-fade-in">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <KpiCard title="Active Patients" value={mon.activePatients} color="bg-blue-100 text-blue-700" icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}/>
+                <KpiCard title="Cumulative Missed" value={mon.totalMissed} subValue="Last doses logged" color="bg-red-100 text-red-700" icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}/>
+                <KpiCard title="Completed" value={mon.completedCount} color="bg-green-100 text-green-700" icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}/>
+                <KpiCard title="Avg. DOT" value={`${mon.avgDot} days`} color="bg-teal-100 text-teal-700" icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}/>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <ChartWrapper title="Therapy Status Breakdown">
+                    <ResponsiveContainer>
+                        <PieChart>
+                            <Pie data={mon.outcomes} dataKey="value" nameKey="name" outerRadius={100} label>
+                                {mon.outcomes.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
+                            </Pie>
+                            <Tooltip />
+                            <Legend />
+                        </PieChart>
+                    </ResponsiveContainer>
+                </ChartWrapper>
+                <ChartWrapper title="Reasons for Missed Doses">
+                    <ResponsiveContainer>
+                        <BarChart data={mon.missedReasons} layout="vertical" margin={{ left: 80 }}>
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                            <XAxis type="number" />
+                            <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} />
+                            <Tooltip />
+                            <Bar dataKey="value" fill="#ef4444" radius={[0, 4, 4, 0]} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </ChartWrapper>
+                <Top5List title="Top Monitored Antimicrobials" data={mon.topMonitoringDrugs} color="bg-indigo-100 text-indigo-700" icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>} />
+            </div>
+        </div>;
+
       case 'Audits':
         const a = processedAuditData;
         return <div className="space-y-6 animate-fade-in">
@@ -510,10 +613,11 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
   }
 
   const tabs = useMemo(() => {
+    const baseTabs = ['General', 'Restricted', 'Monitored', 'Pharmacy', 'AMS Monitoring'];
     if (role === 'PHARMACIST') {
-        return ['General', 'Restricted', 'Monitored', 'Pharmacy'];
+        return baseTabs.slice(0, 4); 
     }
-    return ['General', 'Restricted', 'Monitored', 'Pharmacy', 'IDS', 'Audits'];
+    return [...baseTabs, 'IDS', 'Audits'];
   }, [role]);
 
   return (

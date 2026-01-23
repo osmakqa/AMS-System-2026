@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Prescription, UserRole, PrescriptionStatus, DrugType, ActionType, RequestFinding, PreviousAntibiotic, Organism } from '../types';
 import { IDS_SPECIALISTS } from '../constants'; 
@@ -383,11 +382,12 @@ const DetailModal: React.FC<DetailModalProps> = ({ isOpen, onClose, item, role, 
                     </SelectableSection>
                     
                     <SelectableSection id="Personnel Involved" title="Accountability" className="bg-gray-50 p-4 rounded-lg border border-gray-100 col-span-full">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                             <InfoItem label="Resident" value={item.resident_name} />
                             <InfoItem label="Service" value={item.service_resident_name} />
                             <InfoItem label="Dept" value={item.clinical_dept} />
                             <InfoItem label="IDS Consultant" value={item.id_specialist} />
+                            <InfoItem label="Pharmacist" value={item.dispensed_by} />
                         </div>
                     </SelectableSection>
                 </div>

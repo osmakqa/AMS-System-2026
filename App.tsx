@@ -16,7 +16,7 @@ import AMSAuditForm from './components/AMSAuditForm';
 import AMSAuditTable from './components/AMSAuditTable'; 
 import AMSAuditDetailModal from './components/AMSAuditDetailModal'; 
 import AMSMonitoring from './components/AMSMonitoring'; 
-import { User, UserRole, Prescription, PrescriptionStatus, ActionType, DrugType, AMSAudit } from './types';
+import { User, UserRole, Prescription, PrescriptionStatus, ActionType, DrugType, AMSAudit, MonitoringPatient } from './types';
 import { 
   fetchPrescriptions, 
   updatePrescriptionStatus, 
@@ -69,6 +69,7 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [data, setData] = useState<Prescription[]>([]);
   const [auditData, setAuditData] = useState<AMSAudit[]>([]); 
+  const [monitoringData, setMonitoringData] = useState<MonitoringPatient[]>([]);
   const [activeTab, setActiveTab] = useState('Pending');
   const [loading, setLoading] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
@@ -118,9 +119,19 @@ function App() {
       });
     }
 
+    // Listen for Monitoring Patients
+    const qMonitoring = query(collection(db, 'monitoring_patients'), orderBy('created_at', 'desc'));
+    const unsubscribeMonitoring = onSnapshot(qMonitoring, (snapshot) => {
+      const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as MonitoringPatient[];
+      setMonitoringData(items);
+    }, (err) => {
+      console.error("Monitoring subscription error:", err);
+    });
+
     return () => {
       unsubscribeRequests();
       unsubscribeAudits();
+      unsubscribeMonitoring();
     };
   }, [user]);
 
@@ -153,6 +164,7 @@ function App() {
     setUser(null);
     setData([]);
     setAuditData([]);
+    setMonitoringData([]);
     setDbError(null);
   };
 
@@ -516,7 +528,7 @@ function App() {
         if (historyStatusFilter === 'For IDS Approval') tableStatusType = PrescriptionStatus.FOR_IDS_APPROVAL;
         return <PrescriptionTable items={viewData} onAction={handleActionClick} onView={handleViewDetails} statusType={tableStatusType} isHistoryView={true} />;
       case 'Data Analysis':
-        return <StatsChart data={data} allData={data} auditData={auditData} role={user?.role} selectedMonth={selectedMonth} onMonthChange={setSelectedMonth} selectedYear={selectedYear} onYearChange={setSelectedYear} />;
+        return <StatsChart data={data} allData={data} auditData={auditData} monitoringData={monitoringData} role={user?.role} selectedMonth={selectedMonth} onMonthChange={setSelectedMonth} selectedYear={selectedYear} onYearChange={setSelectedYear} />;
       case 'Antimicrobials':
          let displayData = viewData;
          if (drugTypeFilter === 'Monitored') displayData = viewData.filter(i => i.drug_type === DrugType.MONITORED);

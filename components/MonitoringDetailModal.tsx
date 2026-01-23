@@ -26,6 +26,7 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
   const [activeDrugAction, setActiveDrugAction] = useState<{ drugId: string, type: 'Stop' | 'Shift' | 'Dose' } | null>(null);
   const [cellAction, setCellAction] = useState<{ drugId: string, day: number, doseIndex: number } | null>(null);
   const [pendingUndo, setPendingUndo] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'Flowsheet' | 'Summary'>('Flowsheet');
   
   // States for adding new medication from requests
   const [isAddingMed, setIsAddingMed] = useState(false);
@@ -240,6 +241,23 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
     } catch (err: any) { alert(err.message); } finally { setLoading(false); }
   };
 
+  const calculateSummary = (drug: MonitoringAntimicrobial) => {
+      const log = drug.administration_log || {};
+      let given = 0;
+      let missed = 0;
+      Object.values(log).forEach((dayDoses: any[]) => {
+          dayDoses.forEach(entry => {
+              const e = normalizeLogEntry(entry);
+              if (e?.status === 'Given') given++;
+              else if (e?.status === 'Missed') missed++;
+          });
+      });
+      const plannedDays = parseInt(drug.planned_duration) || 7;
+      const dosesPerDay = drug.frequency_hours ? Math.max(1, Math.floor(24 / drug.frequency_hours)) : 1;
+      const totalPlannedDoses = plannedDays * dosesPerDay;
+      return { given, missed, totalPlannedDoses };
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[150] p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-[98vw] h-[95vh] flex flex-col overflow-hidden border border-gray-100 relative" onClick={(e) => e.stopPropagation()}>
@@ -254,7 +272,13 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
               <p className="text-[10px] text-white/70 font-bold uppercase tracking-widest">{patient.hospital_number} • {patient.ward} • Adm: {patient.date_of_admission}</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-white/40 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-full"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+          <div className="flex items-center gap-3">
+              <div className="bg-white/10 p-1 rounded-xl flex">
+                  <button onClick={() => setViewMode('Flowsheet')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'Flowsheet' ? 'bg-white text-blue-600 shadow-sm' : 'text-white hover:bg-white/10'}`}>Flowsheet</button>
+                  <button onClick={() => setViewMode('Summary')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'Summary' ? 'bg-white text-blue-600 shadow-sm' : 'text-white hover:bg-white/10'}`}>Summary</button>
+              </div>
+              <button onClick={onClose} className="text-white/40 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-full"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+          </div>
         </header>
 
         <div className="flex-1 flex overflow-hidden bg-white">
@@ -320,92 +344,150 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
                 </div>
             </div>
 
-            {/* FLOWSHEET */}
+            {/* MAIN CONTENT AREA */}
             <div className="flex-1 overflow-auto p-4 bg-white relative">
-                <div className="inline-block min-w-full border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-                    <table className="min-w-full border-collapse table-fixed">
-                        <thead className="bg-gray-50 sticky top-0 z-20 border-b border-gray-200 text-black">
-                            <tr>
-                                <th className="p-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest border-r border-gray-200 bg-gray-50 sticky left-0 z-30 w-60 shadow-[2px_0_4px_rgba(0,0,0,0.05)]">Antimicrobial / Scheduled Times</th>
-                                {dayColumns.map(day => (
-                                    <th key={day} className="p-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest border-r border-gray-200 min-w-[70px]">
-                                        <div className="text-blue-600">Day {day}</div>
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200">
-                            {(patient.antimicrobials || []).map(drug => {
-                                if (!drug) return null;
-                                const dosesPerDay = drug.frequency_hours ? Math.max(1, Math.floor(24 / drug.frequency_hours)) : 1;
-                                const scheduledTimes = (drug as any).scheduled_times || Array(dosesPerDay).fill("");
-                                const plannedDuration = parseInt(drug.planned_duration) || 7;
-                                
-                                return (
-                                    <React.Fragment key={drug.id}>
-                                        {/* Medication Header Row */}
-                                        <tr className="bg-gray-50/50">
-                                            <td className="p-3 border-r border-gray-200 sticky left-0 z-10 bg-gray-50 shadow-[2px_0_4px_rgba(0,0,0,0.02)]">
-                                                <div className="font-black text-xs text-black uppercase tracking-tight">{drug.drug_name}</div>
-                                                <div className="text-[9px] text-gray-500 font-bold uppercase">{drug.dose} • {drug.route} • {drug.frequency}</div>
-                                                <div className="text-[8px] text-blue-600 font-black uppercase mt-0.5">Target: {plannedDuration} days</div>
-                                            </td>
-                                            {dayColumns.map(day => {
-                                                const isBeyond = day > plannedDuration;
-                                                return <td key={day} className={`border-r border-gray-100 ${isBeyond ? 'bg-gray-200/40' : 'bg-gray-50/30'}`} />;
-                                            })}
-                                        </tr>
-                                        {/* Dose rows with Time in First Column */}
-                                        {Array.from({ length: dosesPerDay }).map((_, doseIdx) => (
-                                            <tr key={`${drug.id}-${doseIdx}`} className="hover:bg-blue-50/30 transition-colors">
-                                                <td className="p-2 border-r border-gray-200 sticky left-0 z-10 bg-white shadow-[2px_0_4px_rgba(0,0,0,0.02)] flex items-center gap-2">
-                                                    <span className="text-[9px] font-black text-gray-400 shrink-0">Dose {doseIdx + 1}:</span>
-                                                    <input 
-                                                        type="time" 
-                                                        className="flex-1 text-xs font-bold border border-gray-200 bg-gray-50 text-gray-800 p-1 px-2 rounded-lg outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white [color-scheme:light]"
-                                                        value={scheduledTimes[doseIdx] || ""}
-                                                        onChange={(e) => handleTimeUpdate(drug.id, doseIdx, e.target.value)}
-                                                    />
+                {viewMode === 'Flowsheet' ? (
+                    <div className="inline-block min-w-full border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+                        <table className="min-w-full border-collapse table-fixed">
+                            <thead className="bg-gray-50 sticky top-0 z-20 border-b border-gray-200 text-black">
+                                <tr>
+                                    <th className="p-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest border-r border-gray-200 bg-gray-50 sticky left-0 z-30 w-60 shadow-[2px_0_4px_rgba(0,0,0,0.05)]">Antimicrobial / Scheduled Times</th>
+                                    {dayColumns.map(day => (
+                                        <th key={day} className="p-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest border-r border-gray-200 min-w-[70px]">
+                                            <div className="text-blue-600">Day {day}</div>
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                                {(patient.antimicrobials || []).map(drug => {
+                                    if (!drug) return null;
+                                    const dosesPerDay = drug.frequency_hours ? Math.max(1, Math.floor(24 / drug.frequency_hours)) : 1;
+                                    const scheduledTimes = (drug as any).scheduled_times || Array(dosesPerDay).fill("");
+                                    const plannedDuration = parseInt(drug.planned_duration) || 7;
+                                    
+                                    return (
+                                        <React.Fragment key={drug.id}>
+                                            {/* Medication Header Row */}
+                                            <tr className="bg-gray-50/50">
+                                                <td className="p-3 border-r border-gray-200 sticky left-0 z-10 bg-gray-50 shadow-[2px_0_4px_rgba(0,0,0,0.02)]">
+                                                    <div className="font-black text-xs text-black uppercase tracking-tight">{drug.drug_name}</div>
+                                                    <div className="text-[9px] text-gray-500 font-bold uppercase">{drug.dose} • {drug.route} • {drug.frequency}</div>
+                                                    <div className="text-[8px] text-blue-600 font-black uppercase mt-0.5">Target: {plannedDuration} days</div>
                                                 </td>
                                                 {dayColumns.map(day => {
                                                     const isBeyond = day > plannedDuration;
-                                                    const startDate = new Date(drug.start_date);
-                                                    const cellDate = new Date(startDate);
-                                                    cellDate.setDate(startDate.getDate() + (day - 1));
-                                                    const dateStr = cellDate.toISOString().split('T')[0];
-                                                    const logEntry = normalizeLogEntry(drug.administration_log?.[dateStr]?.[doseIdx]);
-                                                    const isActive = drug.status === 'Active' && !isBeyond;
-                                                    
-                                                    return (
-                                                        <td 
-                                                            key={day} 
-                                                            className={`p-2 border-r border-gray-100 text-center transition-all ${isActive ? 'cursor-pointer hover:bg-blue-100' : (isBeyond ? 'bg-gray-200/50 cursor-not-allowed' : 'bg-gray-50 opacity-40')}`}
-                                                            onClick={() => isActive && setCellAction({ drugId: drug.id, day, doseIndex: doseIdx })}
-                                                        >
-                                                            {logEntry ? (
-                                                                <div className={`w-8 h-8 mx-auto rounded-lg flex items-center justify-center text-[10px] font-black border shadow-sm ${logEntry.status === 'Given' ? 'bg-green-600 text-white border-green-700' : 'bg-red-600 text-white border-red-700'}`} title={logEntry.user ? `Logged by ${logEntry.user}` : ''}>
-                                                                    {logEntry.status === 'Given' ? 'G' : 'M'}
-                                                                </div>
-                                                            ) : (
-                                                                isBeyond ? (
-                                                                    <div className="w-full h-full flex items-center justify-center text-[8px] font-black text-gray-400 opacity-30 select-none">
-                                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor opacity-20"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="w-6 h-6 mx-auto border border-gray-200 rounded-md border-dashed bg-gray-50/50" />
-                                                                )
-                                                            )}
-                                                        </td>
-                                                    );
+                                                    return <td key={day} className={`border-r border-gray-100 ${isBeyond ? 'bg-gray-200/40' : 'bg-gray-50/30'}`} />;
                                                 })}
                                             </tr>
-                                        ))}
-                                    </React.Fragment>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
+                                            {/* Dose rows with Time in First Column */}
+                                            {Array.from({ length: dosesPerDay }).map((_, doseIdx) => (
+                                                <tr key={`${drug.id}-${doseIdx}`} className="hover:bg-blue-50/30 transition-colors">
+                                                    <td className="p-2 border-r border-gray-200 sticky left-0 z-10 bg-white shadow-[2px_0_4px_rgba(0,0,0,0.02)] flex items-center gap-2">
+                                                        <span className="text-[9px] font-black text-gray-400 shrink-0">Dose {doseIdx + 1}:</span>
+                                                        <input 
+                                                            type="time" 
+                                                            className="flex-1 text-xs font-bold border border-gray-200 bg-gray-50 text-gray-800 p-1 px-2 rounded-lg outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white [color-scheme:light]"
+                                                            value={scheduledTimes[doseIdx] || ""}
+                                                            onChange={(e) => handleTimeUpdate(drug.id, doseIdx, e.target.value)}
+                                                        />
+                                                    </td>
+                                                    {dayColumns.map(day => {
+                                                        const isBeyond = day > plannedDuration;
+                                                        const startDate = new Date(drug.start_date);
+                                                        const cellDate = new Date(startDate);
+                                                        cellDate.setDate(startDate.getDate() + (day - 1));
+                                                        const dateStr = cellDate.toISOString().split('T')[0];
+                                                        const logEntry = normalizeLogEntry(drug.administration_log?.[dateStr]?.[doseIdx]);
+                                                        const isActive = drug.status === 'Active' && !isBeyond;
+                                                        
+                                                        return (
+                                                            <td 
+                                                                key={day} 
+                                                                className={`p-2 border-r border-gray-100 text-center transition-all ${isActive ? 'cursor-pointer hover:bg-blue-100' : (isBeyond ? 'bg-gray-200/50 cursor-not-allowed' : 'bg-gray-50 opacity-40')}`}
+                                                                onClick={() => isActive && setCellAction({ drugId: drug.id, day, doseIndex: doseIdx })}
+                                                            >
+                                                                {logEntry ? (
+                                                                    <div className={`w-8 h-8 mx-auto rounded-lg flex items-center justify-center text-[10px] font-black border shadow-sm ${logEntry.status === 'Given' ? 'bg-green-600 text-white border-green-700' : 'bg-red-600 text-white border-red-700'}`} title={logEntry.user ? `Logged by ${logEntry.user}` : ''}>
+                                                                        {logEntry.status === 'Given' ? 'G' : 'M'}
+                                                                    </div>
+                                                                ) : (
+                                                                    isBeyond ? (
+                                                                        <div className="w-full h-full flex items-center justify-center text-[8px] font-black text-gray-400 opacity-30 select-none">
+                                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor opacity-20"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="w-6 h-6 mx-auto border border-gray-200 rounded-md border-dashed bg-gray-50/50" />
+                                                                    )
+                                                                )}
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            ))}
+                                        </React.Fragment>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                ) : (
+                    <div className="space-y-8 max-w-4xl mx-auto py-4">
+                        <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm">
+                            <h4 className="text-xl font-black text-black uppercase tracking-tight mb-6">Antimicrobial Administration Summary</h4>
+                            <div className="space-y-6">
+                                {(patient.antimicrobials || []).map(drug => {
+                                    const { given, missed, totalPlannedDoses } = calculateSummary(drug);
+                                    const progress = Math.min(100, Math.round((given / totalPlannedDoses) * 100));
+                                    const missedPercent = Math.min(100, Math.round((missed / totalPlannedDoses) * 100));
+                                    
+                                    return (
+                                        <div key={drug.id} className="p-5 bg-gray-50 rounded-2xl border border-gray-200">
+                                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+                                                <div>
+                                                    <h5 className="text-lg font-black text-black leading-tight">{drug.drug_name}</h5>
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Started: {drug.start_date}</p>
+                                                </div>
+                                                <div className="flex items-center gap-6">
+                                                    <div className="text-center">
+                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Given</p>
+                                                        <p className="text-xl font-black text-green-600">{given}</p>
+                                                    </div>
+                                                    <div className="text-center border-l border-gray-200 pl-6">
+                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Missed</p>
+                                                        <p className="text-xl font-black text-red-600">{missed}</p>
+                                                    </div>
+                                                    <div className="text-center border-l border-gray-200 pl-6">
+                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Planned</p>
+                                                        <p className="text-xl font-black text-blue-600">{totalPlannedDoses}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="space-y-1.5">
+                                                <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
+                                                    <span className="text-green-700">{progress}% Adherence</span>
+                                                    <span className="text-gray-400">{given + missed} of {totalPlannedDoses} doses processed</span>
+                                                </div>
+                                                <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden flex">
+                                                    <div className="h-full bg-green-500" style={{ width: `${progress}%` }} />
+                                                    <div className="h-full bg-red-500" style={{ width: `${missedPercent}%` }} />
+                                                </div>
+                                            </div>
+                                            
+                                            {drug.status !== 'Active' && (
+                                                <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
+                                                    <div className="text-[10px] font-black text-gray-400 uppercase">Reason for {drug.status}:</div>
+                                                    <p className="text-xs font-bold text-gray-700 italic">{drug.stop_reason || drug.shift_reason || 'Not documented'}</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 <div className="mt-6 flex gap-6 text-[9px] font-black uppercase text-gray-400 tracking-widest flex-wrap">
                     <div className="flex items-center gap-2"><div className="w-4 h-4 bg-green-600 rounded border border-green-700" /> Given (G)</div>
@@ -484,7 +566,7 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
         {/* Cell Action Dialog */}
         {cellAction && (
              <div className="absolute inset-0 bg-black/40 z-[250] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setCellAction(null)}>
-                <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full border border-gray-200 animate-slide-up" onClick={e => e.stopPropagation()}>
+                <div className="bg-white rounded-3xl shadow-2xl p-8 max-sm w-full border border-gray-200 animate-slide-up" onClick={e => e.stopPropagation()}>
                     <h4 className="text-xl font-black text-black uppercase tracking-tight mb-2">Administration Log</h4>
                     <p className="text-xs text-gray-500 mb-6 font-bold uppercase tracking-widest">Record action for Day {cellAction.day} dose</p>
                     
