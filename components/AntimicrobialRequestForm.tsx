@@ -255,7 +255,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
         months += 12;
       }
 
-      const parts = [];
+      const parts: string[] = [];
       if (years > 0) parts.push(`${years} yr${years > 1 ? 's' : ''}`);
       if (months > 0) parts.push(`${months} mo${months > 1 ? 's' : ''}`);
       if (days > 0 || parts.length === 0) parts.push(`${days} day${days !== 1 ? 's' : ''}`);

@@ -41,7 +41,18 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
       remarks: ''
   });
 
-  const dayColumns = useMemo(() => Array.from({ length: 14 }, (_, i) => i + 1), []);
+  // Dynamically calculate the number of columns based on the max planned_duration
+  const dayColumns = useMemo(() => {
+    if (!patient || !patient.antimicrobials || patient.antimicrobials.length === 0) {
+      return Array.from({ length: 7 }, (_, i) => i + 1);
+    }
+    const maxDuration = Math.max(...patient.antimicrobials.map(a => {
+        const d = parseInt(a.planned_duration);
+        return isNaN(d) ? 7 : d;
+    }));
+    // We show at least 7 days for visibility, or the max duration
+    return Array.from({ length: Math.max(7, maxDuration) }, (_, i) => i + 1);
+  }, [patient]);
 
   useEffect(() => {
     if (isAddingMed && patient) {
@@ -55,8 +66,8 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
                     r.patient_name.toLowerCase().includes(patient.patient_name.toLowerCase())
                 );
                 
-                // Further filter out drugs ALREADY being monitored (optionally, or just show all)
-                const existingDrugNames = patient.antimicrobials.map(a => a.drug_name.toLowerCase());
+                // Further filter out drugs ALREADY being monitored
+                const existingDrugNames = (patient.antimicrobials || []).map(a => a.drug_name.toLowerCase());
                 const filtered = patientRequests.filter(r => !existingDrugNames.includes(r.antimicrobial.toLowerCase()));
                 
                 setAvailableRequests(filtered);
@@ -277,6 +288,7 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
                                 <div>
                                     <h5 className="font-black text-black tracking-tight text-sm">{drug.drug_name}</h5>
                                     <p className="text-[9px] font-bold text-blue-600 uppercase mt-1">{drug.dose} • {drug.route} • {drug.frequency}</p>
+                                    <p className="text-[8px] font-bold text-gray-400 uppercase">Duration: {drug.planned_duration} days</p>
                                 </div>
                                 <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded border ${drug.status === 'Active' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-200 text-gray-600 border-gray-300'}`}>{drug.status}</span>
                             </div>
@@ -327,6 +339,7 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
                                 if (!drug) return null;
                                 const dosesPerDay = drug.frequency_hours ? Math.max(1, Math.floor(24 / drug.frequency_hours)) : 1;
                                 const scheduledTimes = (drug as any).scheduled_times || Array(dosesPerDay).fill("");
+                                const plannedDuration = parseInt(drug.planned_duration) || 7;
                                 
                                 return (
                                     <React.Fragment key={drug.id}>
@@ -335,8 +348,12 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
                                             <td className="p-3 border-r border-gray-200 sticky left-0 z-10 bg-gray-50 shadow-[2px_0_4px_rgba(0,0,0,0.02)]">
                                                 <div className="font-black text-xs text-black uppercase tracking-tight">{drug.drug_name}</div>
                                                 <div className="text-[9px] text-gray-500 font-bold uppercase">{drug.dose} • {drug.route} • {drug.frequency}</div>
+                                                <div className="text-[8px] text-blue-600 font-black uppercase mt-0.5">Target: {plannedDuration} days</div>
                                             </td>
-                                            {dayColumns.map(day => <td key={day} className="bg-gray-50/30 border-r border-gray-100" />)}
+                                            {dayColumns.map(day => {
+                                                const isBeyond = day > plannedDuration;
+                                                return <td key={day} className={`border-r border-gray-100 ${isBeyond ? 'bg-gray-200/40' : 'bg-gray-50/30'}`} />;
+                                            })}
                                         </tr>
                                         {/* Dose rows with Time in First Column */}
                                         {Array.from({ length: dosesPerDay }).map((_, doseIdx) => (
@@ -351,17 +368,18 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
                                                     />
                                                 </td>
                                                 {dayColumns.map(day => {
+                                                    const isBeyond = day > plannedDuration;
                                                     const startDate = new Date(drug.start_date);
                                                     const cellDate = new Date(startDate);
                                                     cellDate.setDate(startDate.getDate() + (day - 1));
                                                     const dateStr = cellDate.toISOString().split('T')[0];
                                                     const logEntry = normalizeLogEntry(drug.administration_log?.[dateStr]?.[doseIdx]);
-                                                    const isActive = drug.status === 'Active';
+                                                    const isActive = drug.status === 'Active' && !isBeyond;
                                                     
                                                     return (
                                                         <td 
                                                             key={day} 
-                                                            className={`p-2 border-r border-gray-100 text-center transition-all ${isActive ? 'cursor-pointer hover:bg-blue-100' : 'bg-gray-50 opacity-40'}`}
+                                                            className={`p-2 border-r border-gray-100 text-center transition-all ${isActive ? 'cursor-pointer hover:bg-blue-100' : (isBeyond ? 'bg-gray-200/50 cursor-not-allowed' : 'bg-gray-50 opacity-40')}`}
                                                             onClick={() => isActive && setCellAction({ drugId: drug.id, day, doseIndex: doseIdx })}
                                                         >
                                                             {logEntry ? (
@@ -369,7 +387,13 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
                                                                     {logEntry.status === 'Given' ? 'G' : 'M'}
                                                                 </div>
                                                             ) : (
-                                                                <div className="w-6 h-6 mx-auto border border-gray-200 rounded-md border-dashed bg-gray-50/50" />
+                                                                isBeyond ? (
+                                                                    <div className="w-full h-full flex items-center justify-center text-[8px] font-black text-gray-400 opacity-30 select-none">
+                                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor opacity-20"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="w-6 h-6 mx-auto border border-gray-200 rounded-md border-dashed bg-gray-50/50" />
+                                                                )
                                                             )}
                                                         </td>
                                                     );
@@ -383,10 +407,11 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
                     </table>
                 </div>
 
-                <div className="mt-6 flex gap-6 text-[9px] font-black uppercase text-gray-400 tracking-widest">
+                <div className="mt-6 flex gap-6 text-[9px] font-black uppercase text-gray-400 tracking-widest flex-wrap">
                     <div className="flex items-center gap-2"><div className="w-4 h-4 bg-green-600 rounded border border-green-700" /> Given (G)</div>
                     <div className="flex items-center gap-2"><div className="w-4 h-4 bg-red-600 rounded border border-red-700" /> Missed (M)</div>
                     <div className="flex items-center gap-2"><div className="w-4 h-4 border border-gray-200 border-dashed rounded bg-gray-50" /> Not Logged</div>
+                    <div className="flex items-center gap-2"><div className="w-4 h-4 bg-gray-200 rounded border border-gray-300" /> Beyond Requested Duration</div>
                 </div>
             </div>
         </div>
