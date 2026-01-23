@@ -1,7 +1,8 @@
+
 # Software Requirements Specification (SRS) (ISO 9001:2015 Clause 8.3.3)
 
-**Project:** Osmak Antimicrobial Stewardship (AMS) System
-**Version:** 1.8
+**Project:** Osmak AMS System
+**Version:** 1.9
 
 ---
 
@@ -17,7 +18,8 @@ This document defines the requirements for the Osmak AMS System, an application 
     *   **Edit & Resend:** Can modify their previously disapproved requests and resubmit them, which resets the status to `PENDING` for re-review.
 *   **Pharmacist:**
     *   View "Pending" requests.
-    *   View "Approved", "Disapproved", and "For IDS Approval" requests.
+    *   View "Approved", "Disapproved", and "For IDS Approval" requests in a searchable **History** tab.
+    *   **Advanced Filtering:** Can filter history by antimicrobial drug names and perform global searches on patient identity or request dates.
     *   **Monitored Drugs:** Can Approve or Disapprove.
     *   **Restricted Drugs:** Must Forward to IDS (`FOR_IDS_APPROVAL`).
     *   **Review Findings:** Can add structured findings (e.g., "Wrong Dose", "Wrong Duration") to request records during review.
@@ -54,11 +56,11 @@ This document defines the requirements for the Osmak AMS System, an application 
 *   Key Metrics tracked: Total request volume, approval rates, average turnaround time (Pharmacy & IDS), top prescribed drugs, intervention statistics (findings distribution).
 *   Ability to export filtered data to CSV format from modal views.
 
-### 2.5 AMS Audit Tool
+### 2.5 AMS Audit Tool & Monitoring
 *   Provides a structured form for retrospective clinical auditing.
-*   Captures comprehensive patient demographics, clinical context, and up to 5 antimicrobial treatments.
-*   **AI Guardrails:** Integrates real-time AI checks for renal and weight-based dosing directly within the audit form for each antimicrobial entry.
-*   **General Audit Note:** An editable free-text field for auditors to add high-level case summaries or important observations for the entire audit record.
+*   **AMS Monitoring Log:** A real-time flowsheet for tracking patient administration days (DOT).
+*   **Interactive Log:** Clicking cells allows marking doses as "Given" or "Missed" with immediate data synchronization.
+*   **Custom Verification:** Actions such as "Undo Status" require confirmation via a custom-styled dialog.
 
 ## 3. Data Integrity & Security
 *   **Credential Management:** User credentials are role-based and managed by a system administrator. Password policies are implemented (e.g., `lastname123`, `doctor123`).
@@ -67,4 +69,4 @@ This document defines the requirements for the Osmak AMS System, an application 
 
 ---
 **Verified By:** _________________________ (Project Lead)
-**Date:** 2024-05-01
+**Date:** 2024-05-15

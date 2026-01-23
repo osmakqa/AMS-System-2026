@@ -1,3 +1,4 @@
+
 # Design and Development Change Log (ISO 9001:2015 Clause 8.3.6)
 
 **Project:** Osmak Antimicrobial Stewardship (AMS) System
@@ -15,6 +16,7 @@
 | **v1.6** | 2024-04-01 | **Public Request Portal** | Added "Submit New Request" button on login page for Residents to submit without full account access. | IT Head |
 | **v1.7** | 2024-04-15 | **AMS Audit Tool & Structured Findings** | <ul style="margin:0;padding-left:15px;"><li>**Audit Tool Upgrade:** Full digitisation of AMS Audit form with AI Guardrails and Auto-eGFR.</li><li>**Structured Findings:** Added "Click-to-Comment" findings for Pharmacists reviewing requests.</li><li>**General Notes:** Implemented "General Audit Note" for high-level audit summaries.</li><li>**UI/UX:** Enhanced modal layering (z-index) and removed redundant "Edit Original Data" actions.</li></ul> | AMS Committee Head / IT Head |
 | **v1.8** | 2024-05-01 | **Resident Dashboard & Analytics** | <ul style="margin:0;padding-left:15px;"><li>**Resident Module:** Dedicated dashboard for Residents to view Disapproved requests.</li><li>**Edit & Resend:** Capability for Residents to correct and resubmit requests (Reset to Pending).</li><li>**Pharmacy Analytics:** Added Data Analysis tab for Pharmacists.</li><li>**Security:** Implemented role-specific and name-based password policies.</li></ul> | AMS Committee Head |
+| **v1.9** | 2024-05-15 | **Advanced History Filtering & Monitoring Fixes** | <ul style="margin:0;padding-left:15px;"><li>**History Filters:** Added global search (Name, ID, Drug, Date) and drug-specific dropdown filters for the History tab.</li><li>**Real-time Monitoring:** Fixed sync issues in AMS Monitoring log ensuring changes reflect immediately.</li><li>**Confirmation Dialogs:** Added styled custom "Are you sure?" modals for Undo actions in Monitoring.</li></ul> | IT Head / AMS Lead |
 
 ---
 *This log controls changes made during or subsequent to the design and development of products and services.*

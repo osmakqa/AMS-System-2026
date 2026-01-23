@@ -1,7 +1,7 @@
 
-import React, { useState, useMemo } from 'react';
-import { MonitoringPatient, MonitoringAntimicrobial, AdminLogEntry, User } from '../types';
-import { updateMonitoringPatient } from '../services/dataService';
+import React, { useState, useMemo, useEffect } from 'react';
+import { MonitoringPatient, MonitoringAntimicrobial, AdminLogEntry, User, Prescription } from '../types';
+import { updateMonitoringPatient, fetchPrescriptions } from '../services/dataService';
 
 interface MonitoringDetailModalProps {
   isOpen: boolean;
@@ -25,8 +25,13 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
   const [loading, setLoading] = useState(false);
   const [activeDrugAction, setActiveDrugAction] = useState<{ drugId: string, type: 'Stop' | 'Shift' | 'Dose' } | null>(null);
   const [cellAction, setCellAction] = useState<{ drugId: string, day: number, doseIndex: number } | null>(null);
-  const [pendingUndo, setPendingUndo] = useState<string | null>(null); // State for custom undo confirmation
+  const [pendingUndo, setPendingUndo] = useState<string | null>(null);
   
+  // States for adding new medication from requests
+  const [isAddingMed, setIsAddingMed] = useState(false);
+  const [availableRequests, setAvailableRequests] = useState<Prescription[]>([]);
+  const [fetchingRequests, setFetchingRequests] = useState(false);
+
   const [actionForm, setActionForm] = useState({
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
       date: new Date().toISOString().split('T')[0],
@@ -38,7 +43,66 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
 
   const dayColumns = useMemo(() => Array.from({ length: 14 }, (_, i) => i + 1), []);
 
+  useEffect(() => {
+    if (isAddingMed && patient) {
+        const loadRequests = async () => {
+            setFetchingRequests(true);
+            try {
+                const { data } = await fetchPrescriptions();
+                // Filter requests for THIS patient
+                const patientRequests = data.filter(r => 
+                    r.hospital_number === patient.hospital_number || 
+                    r.patient_name.toLowerCase().includes(patient.patient_name.toLowerCase())
+                );
+                
+                // Further filter out drugs ALREADY being monitored (optionally, or just show all)
+                const existingDrugNames = patient.antimicrobials.map(a => a.drug_name.toLowerCase());
+                const filtered = patientRequests.filter(r => !existingDrugNames.includes(r.antimicrobial.toLowerCase()));
+                
+                setAvailableRequests(filtered);
+            } catch (err) {
+                console.error("Failed to load requests", err);
+            } finally {
+                setFetchingRequests(false);
+            }
+        };
+        loadRequests();
+    }
+  }, [isAddingMed, patient]);
+
   if (!isOpen || !patient) return null;
+
+  const handleAddMedFromRequest = async (req: Prescription) => {
+    setLoading(true);
+    try {
+        const newAbx: MonitoringAntimicrobial = {
+            id: Math.random().toString(36).substr(2, 9),
+            drug_name: req.antimicrobial,
+            dose: req.dose || '',
+            route: 'IV',
+            frequency: req.frequency || '',
+            frequency_hours: parseInt(req.frequency?.replace('q', '').replace('h', '') || '8'),
+            start_date: req.req_date ? req.req_date.split('T')[0] : new Date().toISOString().split('T')[0],
+            planned_duration: req.duration || '7',
+            requesting_resident: req.resident_name || '',
+            ids_in_charge: req.id_specialist || '',
+            status: 'Active',
+            administration_log: {}
+        };
+
+        const updatedAbx = [...(patient.antimicrobials || []), newAbx];
+        await updateMonitoringPatient(patient.id, { 
+            antimicrobials: updatedAbx, 
+            last_updated_by: user?.name 
+        });
+        setIsAddingMed(false);
+        onUpdate();
+    } catch (err: any) {
+        alert("Error: " + err.message);
+    } finally {
+        setLoading(false);
+    }
+  };
 
   const handleUndoStatus = async (drugId: string) => {
     setLoading(true);
@@ -195,7 +259,17 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
                     </div>
                 </section>
 
-                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2 mb-2">Therapy Status</h4>
+                <div className="flex justify-between items-center px-2 mb-2">
+                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Therapy Status</h4>
+                    <button 
+                        onClick={() => setIsAddingMed(true)}
+                        className="text-[9px] font-black text-blue-600 uppercase tracking-widest hover:text-blue-700 flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-md border border-blue-100 transition-all"
+                    >
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                        Add Drug
+                    </button>
+                </div>
+
                 <div className="space-y-3">
                     {(patient.antimicrobials || []).map(drug => drug && (
                         <div key={drug.id} className={`p-4 rounded-xl border transition-all ${drug.status === 'Active' ? 'bg-white border-gray-200 shadow-sm' : 'bg-gray-100 border-gray-200'}`}>
@@ -316,6 +390,46 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
                 </div>
             </div>
         </div>
+
+        {/* Add Medication Overlay */}
+        {isAddingMed && (
+            <div className="absolute inset-0 bg-black/40 z-[280] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsAddingMed(false)}>
+                <div className="bg-white rounded-3xl shadow-2xl p-6 max-w-md w-full border border-gray-200 animate-slide-up flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
+                    <div className="flex justify-between items-center mb-4">
+                        <h4 className="text-xl font-black text-black uppercase tracking-tight">Add Antimicrobial</h4>
+                        <button onClick={() => setIsAddingMed(false)} className="text-gray-400 hover:text-black">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
+                    
+                    <p className="text-xs text-gray-500 mb-6 font-bold uppercase tracking-widest">Select from patient's clinical requests</p>
+                    
+                    <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                        {fetchingRequests ? (
+                             <div className="text-center py-10 text-gray-400">Loading requests...</div>
+                        ) : availableRequests.length > 0 ? (
+                            availableRequests.map(req => (
+                                <button 
+                                    key={req.id} 
+                                    onClick={() => handleAddMedFromRequest(req)}
+                                    className="w-full p-4 bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-2xl text-left transition-all group"
+                                >
+                                    <div className="font-black text-black group-hover:text-blue-700">{req.antimicrobial}</div>
+                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-tight mt-1">{req.dose} • {req.frequency} • {req.duration} days</div>
+                                    <div className="text-[9px] text-blue-500 font-bold mt-2 italic">Requested on {new Date(req.req_date).toLocaleDateString()}</div>
+                                </button>
+                            ))
+                        ) : (
+                            <div className="text-center py-10 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                                <p className="text-sm text-gray-400 font-bold uppercase tracking-widest">No matching requests found</p>
+                            </div>
+                        )}
+                    </div>
+                    
+                    <button onClick={() => setIsAddingMed(false)} className="mt-6 w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-2xl font-black uppercase text-xs tracking-widest transition-all">Cancel</button>
+                </div>
+            </div>
+        )}
 
         {/* Undo Confirmation Overlay */}
         {pendingUndo && (
