@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { MonitoringPatient, MonitoringAntimicrobial, AdminLogEntry, User, Prescription } from '../types';
 import { updateMonitoringPatient, fetchPrescriptions } from '../services/dataService';
@@ -26,7 +25,7 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
   const [activeDrugAction, setActiveDrugAction] = useState<{ drugId: string, type: 'Stop' | 'Shift' | 'Dose' } | null>(null);
   const [cellAction, setCellAction] = useState<{ drugId: string, day: number, doseIndex: number } | null>(null);
   const [pendingUndo, setPendingUndo] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'Flowsheet' | 'Summary'>('Flowsheet');
+  const [viewMode, setViewMode] = useState<'Flowsheet' | 'Summary' | 'Profile'>('Flowsheet');
   
   // States for adding new medication from requests
   const [isAddingMed, setIsAddingMed] = useState(false);
@@ -42,7 +41,17 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
       remarks: ''
   });
 
-  // Dynamically calculate the number of columns based on the max planned_duration
+  // Handle setting initial view mode based on screen size
+  useEffect(() => {
+      if (isOpen) {
+          if (window.innerWidth < 1024) {
+              setViewMode('Profile');
+          } else {
+              setViewMode('Flowsheet');
+          }
+      }
+  }, [isOpen]);
+
   const dayColumns = useMemo(() => {
     if (!patient || !patient.antimicrobials || patient.antimicrobials.length === 0) {
       return Array.from({ length: 7 }, (_, i) => i + 1);
@@ -51,7 +60,6 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
         const d = parseInt(a.planned_duration);
         return isNaN(d) ? 7 : d;
     }));
-    // We show at least 7 days for visibility, or the max duration
     return Array.from({ length: Math.max(7, maxDuration) }, (_, i) => i + 1);
   }, [patient]);
 
@@ -61,16 +69,12 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
             setFetchingRequests(true);
             try {
                 const { data } = await fetchPrescriptions();
-                // Filter requests for THIS patient
                 const patientRequests = data.filter(r => 
                     r.hospital_number === patient.hospital_number || 
                     r.patient_name.toLowerCase().includes(patient.patient_name.toLowerCase())
                 );
-                
-                // Further filter out drugs ALREADY being monitored
                 const existingDrugNames = (patient.antimicrobials || []).map(a => a.drug_name.toLowerCase());
                 const filtered = patientRequests.filter(r => !existingDrugNames.includes(r.antimicrobial.toLowerCase()));
-                
                 setAvailableRequests(filtered);
             } catch (err) {
                 console.error("Failed to load requests", err);
@@ -109,6 +113,8 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
         });
         setIsAddingMed(false);
         onUpdate();
+        // Switch to flowsheet on mobile to see the new entry
+        if (window.innerWidth < 1024) setViewMode('Flowsheet');
     } catch (err: any) {
         alert("Error: " + err.message);
     } finally {
@@ -259,37 +265,41 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[150] p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-[98vw] h-[95vh] flex flex-col overflow-hidden border border-gray-100 relative" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[150] p-0 md:p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+      <div className="bg-white rounded-none md:rounded-3xl shadow-2xl w-full max-w-[100vw] lg:max-w-[98vw] h-full md:h-[95vh] flex flex-col overflow-hidden border border-gray-100 relative" onClick={(e) => e.stopPropagation()}>
         
-        <header className="bg-blue-600 text-white p-4 flex justify-between items-center shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="bg-white/20 p-2 rounded-xl backdrop-blur-md">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+        <header className="bg-blue-600 text-white p-3 md:p-4 flex justify-between items-center shrink-0">
+          <div className="flex items-center gap-2 md:gap-4 overflow-hidden">
+            <div className="bg-white/20 p-1.5 md:p-2 rounded-xl backdrop-blur-md hidden sm:block">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 md:h-6 md:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
             </div>
-            <div>
-              <h3 className="text-xl font-black uppercase tracking-tight">{patient.patient_name}</h3>
-              <p className="text-[10px] text-white/70 font-bold uppercase tracking-widest">{patient.hospital_number} • {patient.ward} • Adm: {patient.date_of_admission}</p>
+            <div className="overflow-hidden">
+              <h3 className="text-sm md:text-xl font-black uppercase tracking-tight truncate">{patient.patient_name}</h3>
+              <p className="text-[8px] md:text-[10px] text-white/70 font-bold uppercase tracking-widest truncate">{patient.hospital_number} • {patient.ward}</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-              <div className="bg-white/10 p-1 rounded-xl flex">
-                  <button onClick={() => setViewMode('Flowsheet')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'Flowsheet' ? 'bg-white text-blue-600 shadow-sm' : 'text-white hover:bg-white/10'}`}>Flowsheet</button>
-                  <button onClick={() => setViewMode('Summary')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'Summary' ? 'bg-white text-blue-600 shadow-sm' : 'text-white hover:bg-white/10'}`}>Summary</button>
+          <div className="flex items-center gap-2 md:gap-3">
+              <div className="bg-white/10 p-0.5 md:p-1 rounded-lg md:rounded-xl flex">
+                  <button onClick={() => setViewMode('Profile')} className={`lg:hidden px-2 md:px-4 py-1 rounded-md md:rounded-lg text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'Profile' ? 'bg-white text-blue-600 shadow-sm' : 'text-white hover:bg-white/10'}`}>Profile</button>
+                  <button onClick={() => setViewMode('Flowsheet')} className={`px-2 md:px-4 py-1 rounded-md md:rounded-lg text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'Flowsheet' ? 'bg-white text-blue-600 shadow-sm' : 'text-white hover:bg-white/10'}`}>Flowsheet</button>
+                  <button onClick={() => setViewMode('Summary')} className={`px-2 md:px-4 py-1 rounded-md md:rounded-lg text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'Summary' ? 'bg-white text-blue-600 shadow-sm' : 'text-white hover:bg-white/10'}`}>Summary</button>
               </div>
-              <button onClick={onClose} className="text-white/40 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-full"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+              <button onClick={onClose} className="text-white/40 hover:text-white transition-colors p-1 md:p-2 hover:bg-white/10 rounded-full"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 md:h-6 md:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
           </div>
         </header>
 
-        <div className="flex-1 flex overflow-hidden bg-white">
+        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-white">
             
-            {/* LEFT COLUMN: Clinical Context & Actions */}
-            <div className="w-[300px] border-r border-gray-200 overflow-y-auto p-4 space-y-6 bg-gray-50/30">
+            {/* SIDEBAR: Profile & Therapy Status - Responsive */}
+            <div className={`w-full lg:w-[300px] border-b lg:border-b-0 lg:border-r border-gray-200 overflow-y-auto p-4 space-y-6 bg-gray-50/30 ${viewMode !== 'Profile' ? 'hidden lg:block' : 'block'}`}>
                 <section className="p-4 bg-white rounded-2xl border border-gray-200 shadow-sm">
                     <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-3 border-b border-blue-50 pb-1">Clinical Profile</h4>
                     <div className="space-y-3 text-black">
-                        <div><p className="text-[9px] font-bold text-gray-400 uppercase">Age / Sex</p><p className="text-sm font-bold">{patient.age} / {patient.sex}</p></div>
-                        <div><p className="text-[9px] font-bold text-gray-400 uppercase">eGFR (Latest SCr: {patient.latest_creatinine})</p><p className="text-sm font-bold text-blue-700">{patient.egfr}</p></div>
+                        <div className="grid grid-cols-2 gap-2 lg:block lg:space-y-3">
+                            <div><p className="text-[9px] font-bold text-gray-400 uppercase">Age / Sex</p><p className="text-sm font-bold">{patient.age} / {patient.sex}</p></div>
+                            <div><p className="text-[9px] font-bold text-gray-400 uppercase">Latest SCr</p><p className="text-sm font-bold">{patient.latest_creatinine || 'N/A'}</p></div>
+                        </div>
+                        <div><p className="text-[9px] font-bold text-gray-400 uppercase">eGFR</p><p className="text-sm font-bold text-blue-700">{patient.egfr}</p></div>
                         <div><p className="text-[9px] font-bold text-gray-400 uppercase">Primary Diagnosis</p><p className="text-sm font-bold leading-tight">{patient.infectious_diagnosis}</p></div>
                     </div>
                 </section>
@@ -345,15 +355,15 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
             </div>
 
             {/* MAIN CONTENT AREA */}
-            <div className="flex-1 overflow-auto p-4 bg-white relative">
+            <div className={`flex-1 overflow-auto p-2 md:p-4 bg-white relative ${viewMode === 'Profile' ? 'hidden lg:block' : 'block'}`}>
                 {viewMode === 'Flowsheet' ? (
                     <div className="inline-block min-w-full border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
                         <table className="min-w-full border-collapse table-fixed">
                             <thead className="bg-gray-50 sticky top-0 z-20 border-b border-gray-200 text-black">
                                 <tr>
-                                    <th className="p-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest border-r border-gray-200 bg-gray-50 sticky left-0 z-30 w-60 shadow-[2px_0_4px_rgba(0,0,0,0.05)]">Antimicrobial / Scheduled Times</th>
+                                    <th className="p-2 md:p-3 text-left text-[8px] md:text-[10px] font-black text-gray-500 uppercase tracking-widest border-r border-gray-200 bg-gray-50 sticky left-0 z-30 w-32 md:w-60 shadow-[2px_0_4px_rgba(0,0,0,0.05)]">Antimicrobial / Scheduled Times</th>
                                     {dayColumns.map(day => (
-                                        <th key={day} className="p-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest border-r border-gray-200 min-w-[70px]">
+                                        <th key={day} className="p-2 md:p-3 text-center text-[8px] md:text-[10px] font-black text-gray-500 uppercase tracking-widest border-r border-gray-200 min-w-[50px] md:min-w-[70px]">
                                             <div className="text-blue-600">Day {day}</div>
                                         </th>
                                     ))}
@@ -370,10 +380,10 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
                                         <React.Fragment key={drug.id}>
                                             {/* Medication Header Row */}
                                             <tr className="bg-gray-50/50">
-                                                <td className="p-3 border-r border-gray-200 sticky left-0 z-10 bg-gray-50 shadow-[2px_0_4px_rgba(0,0,0,0.02)]">
-                                                    <div className="font-black text-xs text-black uppercase tracking-tight">{drug.drug_name}</div>
-                                                    <div className="text-[9px] text-gray-500 font-bold uppercase">{drug.dose} • {drug.route} • {drug.frequency}</div>
-                                                    <div className="text-[8px] text-blue-600 font-black uppercase mt-0.5">Target: {plannedDuration} days</div>
+                                                <td className="p-2 md:p-3 border-r border-gray-200 sticky left-0 z-10 bg-gray-50 shadow-[2px_0_4px_rgba(0,0,0,0.02)]">
+                                                    <div className="font-black text-[10px] md:text-xs text-black uppercase tracking-tight truncate">{drug.drug_name}</div>
+                                                    <div className="hidden md:block text-[9px] text-gray-500 font-bold uppercase">{drug.dose} • {drug.route} • {drug.frequency}</div>
+                                                    <div className="text-[7px] md:text-[8px] text-blue-600 font-black uppercase mt-0.5">Target: {plannedDuration}d</div>
                                                 </td>
                                                 {dayColumns.map(day => {
                                                     const isBeyond = day > plannedDuration;
@@ -383,11 +393,11 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
                                             {/* Dose rows with Time in First Column */}
                                             {Array.from({ length: dosesPerDay }).map((_, doseIdx) => (
                                                 <tr key={`${drug.id}-${doseIdx}`} className="hover:bg-blue-50/30 transition-colors">
-                                                    <td className="p-2 border-r border-gray-200 sticky left-0 z-10 bg-white shadow-[2px_0_4px_rgba(0,0,0,0.02)] flex items-center gap-2">
-                                                        <span className="text-[9px] font-black text-gray-400 shrink-0">Dose {doseIdx + 1}:</span>
+                                                    <td className="p-1 md:p-2 border-r border-gray-200 sticky left-0 z-10 bg-white shadow-[2px_0_4px_rgba(0,0,0,0.02)] flex flex-col md:flex-row md:items-center gap-1 md:gap-2">
+                                                        <span className="text-[7px] md:text-[9px] font-black text-gray-400 shrink-0">Dose {doseIdx + 1}:</span>
                                                         <input 
                                                             type="time" 
-                                                            className="flex-1 text-xs font-bold border border-gray-200 bg-gray-50 text-gray-800 p-1 px-2 rounded-lg outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white [color-scheme:light]"
+                                                            className="flex-1 text-[9px] md:text-xs font-bold border border-gray-200 bg-gray-50 text-gray-800 p-0.5 md:p-1 px-1 md:px-2 rounded-lg outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white [color-scheme:light]"
                                                             value={scheduledTimes[doseIdx] || ""}
                                                             onChange={(e) => handleTimeUpdate(drug.id, doseIdx, e.target.value)}
                                                         />
@@ -404,20 +414,20 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
                                                         return (
                                                             <td 
                                                                 key={day} 
-                                                                className={`p-2 border-r border-gray-100 text-center transition-all ${isActive ? 'cursor-pointer hover:bg-blue-100' : (isBeyond ? 'bg-gray-200/50 cursor-not-allowed' : 'bg-gray-50 opacity-40')}`}
+                                                                className={`p-1 md:p-2 border-r border-gray-100 text-center transition-all ${isActive ? 'cursor-pointer hover:bg-blue-100' : (isBeyond ? 'bg-gray-200/50 cursor-not-allowed' : 'bg-gray-50 opacity-40')}`}
                                                                 onClick={() => isActive && setCellAction({ drugId: drug.id, day, doseIndex: doseIdx })}
                                                             >
                                                                 {logEntry ? (
-                                                                    <div className={`w-8 h-8 mx-auto rounded-lg flex items-center justify-center text-[10px] font-black border shadow-sm ${logEntry.status === 'Given' ? 'bg-green-600 text-white border-green-700' : 'bg-red-600 text-white border-red-700'}`} title={logEntry.user ? `Logged by ${logEntry.user}` : ''}>
+                                                                    <div className={`w-6 h-6 md:w-8 md:h-8 mx-auto rounded-lg flex items-center justify-center text-[8px] md:text-[10px] font-black border shadow-sm ${logEntry.status === 'Given' ? 'bg-green-600 text-white border-green-700' : 'bg-red-600 text-white border-red-700'}`} title={logEntry.user ? `Logged by ${logEntry.user}` : ''}>
                                                                         {logEntry.status === 'Given' ? 'G' : 'M'}
                                                                     </div>
                                                                 ) : (
                                                                     isBeyond ? (
-                                                                        <div className="w-full h-full flex items-center justify-center text-[8px] font-black text-gray-400 opacity-30 select-none">
-                                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor opacity-20"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                                                                        <div className="w-full h-full flex items-center justify-center text-[7px] md:text-[8px] font-black text-gray-400 opacity-30 select-none">
+                                                                            <svg className="w-3 h-3 md:w-4 md:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ opacity: 0.2 }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
                                                                         </div>
                                                                     ) : (
-                                                                        <div className="w-6 h-6 mx-auto border border-gray-200 rounded-md border-dashed bg-gray-50/50" />
+                                                                        <div className="w-4 h-4 md:w-6 md:h-6 mx-auto border border-gray-200 rounded-md border-dashed bg-gray-50/50" />
                                                                     )
                                                                 )}
                                                             </td>
@@ -432,53 +442,53 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
                         </table>
                     </div>
                 ) : (
-                    <div className="space-y-8 max-w-4xl mx-auto py-4">
-                        <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm">
-                            <h4 className="text-xl font-black text-black uppercase tracking-tight mb-6">Antimicrobial Administration Summary</h4>
-                            <div className="space-y-6">
+                    <div className="space-y-4 md:space-y-8 max-w-4xl mx-auto py-2 md:py-4">
+                        <div className="bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl border border-gray-200 shadow-sm">
+                            <h4 className="text-sm md:text-xl font-black text-black uppercase tracking-tight mb-4 md:mb-6">Antimicrobial Administration Summary</h4>
+                            <div className="space-y-4 md:space-y-6">
                                 {(patient.antimicrobials || []).map(drug => {
                                     const { given, missed, totalPlannedDoses } = calculateSummary(drug);
                                     const progress = Math.min(100, Math.round((given / totalPlannedDoses) * 100));
                                     const missedPercent = Math.min(100, Math.round((missed / totalPlannedDoses) * 100));
                                     
                                     return (
-                                        <div key={drug.id} className="p-5 bg-gray-50 rounded-2xl border border-gray-200">
-                                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+                                        <div key={drug.id} className="p-3 md:p-5 bg-gray-50 rounded-xl md:rounded-2xl border border-gray-200">
+                                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-3 md:mb-4 gap-2 md:gap-4">
                                                 <div>
-                                                    <h5 className="text-lg font-black text-black leading-tight">{drug.drug_name}</h5>
-                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Started: {drug.start_date}</p>
+                                                    <h5 className="text-sm md:text-lg font-black text-black leading-tight">{drug.drug_name}</h5>
+                                                    <p className="text-[8px] md:text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Started: {drug.start_date}</p>
                                                 </div>
-                                                <div className="flex items-center gap-6">
+                                                <div className="flex items-center gap-4 md:gap-6">
                                                     <div className="text-center">
-                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Given</p>
-                                                        <p className="text-xl font-black text-green-600">{given}</p>
+                                                        <p className="text-[8px] md:text-[9px] font-black text-gray-400 uppercase tracking-widest">Given</p>
+                                                        <p className="text-sm md:text-xl font-black text-green-600">{given}</p>
                                                     </div>
-                                                    <div className="text-center border-l border-gray-200 pl-6">
-                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Missed</p>
-                                                        <p className="text-xl font-black text-red-600">{missed}</p>
+                                                    <div className="text-center border-l border-gray-200 pl-4 md:pl-6">
+                                                        <p className="text-[8px] md:text-[9px] font-black text-gray-400 uppercase tracking-widest">Missed</p>
+                                                        <p className="text-sm md:text-xl font-black text-red-600">{missed}</p>
                                                     </div>
-                                                    <div className="text-center border-l border-gray-200 pl-6">
-                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Planned</p>
-                                                        <p className="text-xl font-black text-blue-600">{totalPlannedDoses}</p>
+                                                    <div className="text-center border-l border-gray-200 pl-4 md:pl-6">
+                                                        <p className="text-[8px] md:text-[9px] font-black text-gray-400 uppercase tracking-widest">Planned</p>
+                                                        <p className="text-sm md:text-xl font-black text-blue-600">{totalPlannedDoses}</p>
                                                     </div>
                                                 </div>
                                             </div>
                                             
                                             <div className="space-y-1.5">
-                                                <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
+                                                <div className="flex justify-between text-[8px] md:text-[10px] font-black uppercase tracking-widest">
                                                     <span className="text-green-700">{progress}% Adherence</span>
-                                                    <span className="text-gray-400">{given + missed} of {totalPlannedDoses} doses processed</span>
+                                                    <span className="text-gray-400">{given + missed} of {totalPlannedDoses} doses</span>
                                                 </div>
-                                                <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden flex">
+                                                <div className="w-full h-2 md:h-3 bg-gray-200 rounded-full overflow-hidden flex">
                                                     <div className="h-full bg-green-500" style={{ width: `${progress}%` }} />
                                                     <div className="h-full bg-red-500" style={{ width: `${missedPercent}%` }} />
                                                 </div>
                                             </div>
                                             
                                             {drug.status !== 'Active' && (
-                                                <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
-                                                    <div className="text-[10px] font-black text-gray-400 uppercase">Reason for {drug.status}:</div>
-                                                    <p className="text-xs font-bold text-gray-700 italic">{drug.stop_reason || drug.shift_reason || 'Not documented'}</p>
+                                                <div className="mt-3 md:mt-4 pt-3 md:pt-4 border-t border-gray-200 flex justify-between items-center">
+                                                    <div className="text-[8px] md:text-[10px] font-black text-gray-400 uppercase">Reason for {drug.status}:</div>
+                                                    <p className="text-[10px] md:text-xs font-bold text-gray-700 italic">{drug.stop_reason || drug.shift_reason || 'Not documented'}</p>
                                                 </div>
                                             )}
                                         </div>
@@ -489,126 +499,29 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
                     </div>
                 )}
 
-                <div className="mt-6 flex gap-6 text-[9px] font-black uppercase text-gray-400 tracking-widest flex-wrap">
-                    <div className="flex items-center gap-2"><div className="w-4 h-4 bg-green-600 rounded border border-green-700" /> Given (G)</div>
-                    <div className="flex items-center gap-2"><div className="w-4 h-4 bg-red-600 rounded border border-red-700" /> Missed (M)</div>
-                    <div className="flex items-center gap-2"><div className="w-4 h-4 border border-gray-200 border-dashed rounded bg-gray-50" /> Not Logged</div>
-                    <div className="flex items-center gap-2"><div className="w-4 h-4 bg-gray-200 rounded border border-gray-300" /> Beyond Requested Duration</div>
+                <div className="mt-4 md:mt-6 flex gap-3 md:gap-6 text-[7px] md:text-[9px] font-black uppercase text-gray-400 tracking-widest flex-wrap">
+                    <div className="flex items-center gap-1.5 md:gap-2"><div className="w-3 h-3 md:w-4 md:h-4 bg-green-600 rounded border border-green-700" /> Given (G)</div>
+                    <div className="flex items-center gap-1.5 md:gap-2"><div className="w-3 h-3 md:w-4 md:h-4 bg-red-600 rounded border border-red-700" /> Missed (M)</div>
+                    <div className="flex items-center gap-1.5 md:gap-2"><div className="w-3 h-3 md:w-4 md:h-4 border border-gray-200 border-dashed rounded bg-gray-50" /> Not Logged</div>
+                    <div className="flex items-center gap-1.5 md:gap-2"><div className="w-3 h-3 md:w-4 md:h-4 bg-gray-200 rounded border border-gray-300" /> End of Tx</div>
                 </div>
             </div>
         </div>
 
-        {/* Add Medication Overlay */}
-        {isAddingMed && (
-            <div className="absolute inset-0 bg-black/40 z-[280] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsAddingMed(false)}>
-                <div className="bg-white rounded-3xl shadow-2xl p-6 max-w-md w-full border border-gray-200 animate-slide-up flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
-                    <div className="flex justify-between items-center mb-4">
-                        <h4 className="text-xl font-black text-black uppercase tracking-tight">Add Antimicrobial</h4>
-                        <button onClick={() => setIsAddingMed(false)} className="text-gray-400 hover:text-black">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                        </button>
-                    </div>
-                    
-                    <p className="text-xs text-gray-500 mb-6 font-bold uppercase tracking-widest">Select from patient's clinical requests</p>
-                    
-                    <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-                        {fetchingRequests ? (
-                             <div className="text-center py-10 text-gray-400">Loading requests...</div>
-                        ) : availableRequests.length > 0 ? (
-                            availableRequests.map(req => (
-                                <button 
-                                    key={req.id} 
-                                    onClick={() => handleAddMedFromRequest(req)}
-                                    className="w-full p-4 bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-2xl text-left transition-all group"
-                                >
-                                    <div className="font-black text-black group-hover:text-blue-700">{req.antimicrobial}</div>
-                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-tight mt-1">{req.dose} • {req.frequency} • {req.duration} days</div>
-                                    <div className="text-[9px] text-blue-500 font-bold mt-2 italic">Requested on {new Date(req.req_date).toLocaleDateString()}</div>
-                                </button>
-                            ))
-                        ) : (
-                            <div className="text-center py-10 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                                <p className="text-sm text-gray-400 font-bold uppercase tracking-widest">No matching requests found</p>
-                            </div>
-                        )}
-                    </div>
-                    
-                    <button onClick={() => setIsAddingMed(false)} className="mt-6 w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-2xl font-black uppercase text-xs tracking-widest transition-all">Cancel</button>
-                </div>
-            </div>
-        )}
-
-        {/* Undo Confirmation Overlay */}
-        {pendingUndo && (
-            <div className="absolute inset-0 bg-black/40 z-[300] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setPendingUndo(null)}>
-                <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full border border-gray-200 animate-slide-up" onClick={e => e.stopPropagation()}>
-                    <h4 className="text-xl font-black text-black uppercase tracking-tight mb-2">Are you sure?</h4>
-                    <p className="text-xs text-gray-500 mb-6 font-bold uppercase tracking-widest">Revert this medication to active status?</p>
-                    
-                    <div className="grid grid-cols-1 gap-3">
-                        <button 
-                            onClick={() => handleUndoStatus(pendingUndo)}
-                            className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-lg shadow-blue-200 active:scale-95"
-                        >
-                            Yes, Revert to Active
-                        </button>
-                        <button 
-                            onClick={() => setPendingUndo(null)}
-                            className="w-full py-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-2xl font-black uppercase text-xs tracking-widest transition-all active:scale-95"
-                        >
-                            No, Keep Current Status
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )}
-
-        {/* Cell Action Dialog */}
-        {cellAction && (
-             <div className="absolute inset-0 bg-black/40 z-[250] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setCellAction(null)}>
-                <div className="bg-white rounded-3xl shadow-2xl p-8 max-sm w-full border border-gray-200 animate-slide-up" onClick={e => e.stopPropagation()}>
-                    <h4 className="text-xl font-black text-black uppercase tracking-tight mb-2">Administration Log</h4>
-                    <p className="text-xs text-gray-500 mb-6 font-bold uppercase tracking-widest">Record action for Day {cellAction.day} dose</p>
-                    
-                    <div className="grid grid-cols-1 gap-3">
-                        <button 
-                            onClick={() => updateCellStatus('Given')}
-                            className="w-full py-4 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-lg shadow-green-200 active:scale-95"
-                        >
-                            Mark as Given
-                        </button>
-                        <button 
-                            onClick={() => updateCellStatus('Missed')}
-                            className="w-full py-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-lg shadow-red-200 active:scale-95"
-                        >
-                            Mark as Missed
-                        </button>
-                        <button 
-                            onClick={() => updateCellStatus(null)}
-                            className="w-full py-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-2xl font-black uppercase text-xs tracking-widest transition-all active:scale-95"
-                        >
-                            Clear Entry
-                        </button>
-                    </div>
-                    <button onClick={() => setCellAction(null)} className="mt-6 w-full py-2 text-xs font-bold text-gray-400 hover:text-gray-600 uppercase tracking-widest">Cancel</button>
-                </div>
-             </div>
-        )}
-
-        {/* Action Overlay Modals */}
+        {/* Action Overlay Modals - Mobile Friendly */}
         {activeDrugAction && (
             <div className="absolute inset-0 bg-white/95 z-[200] flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
-                <div className="w-full max-w-md space-y-6 bg-white p-8 rounded-3xl shadow-2xl border border-gray-100">
+                <div className="w-full max-w-md space-y-4 md:space-y-6 bg-white p-6 md:p-8 rounded-3xl shadow-2xl border border-gray-100">
                     <div className="flex justify-between items-center">
-                        <h3 className="text-2xl font-black text-black uppercase tracking-tight">{activeDrugAction.type} Medication</h3>
-                        <button onClick={() => setActiveDrugAction(null)} className="text-gray-400 hover:text-black"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                        <h3 className="text-lg md:text-2xl font-black text-black uppercase tracking-tight">{activeDrugAction.type} Medication</h3>
+                        <button onClick={() => setActiveDrugAction(null)} className="text-gray-400 hover:text-black"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 md:h-6 md:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
                     </div>
 
-                    <div className="space-y-4">
+                    <div className="space-y-3 md:space-y-4">
                         {activeDrugAction.type === 'Stop' && (
                             <div className="flex flex-col gap-1 text-black">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Reason for Stopping</label>
-                                <select className="p-3 bg-white border border-gray-300 rounded-xl text-black font-bold outline-none [color-scheme:light]" value={actionForm.reason} onChange={e => setActionForm({...actionForm, reason: e.target.value})}>
+                                <select className="p-2.5 md:p-3 bg-white border border-gray-300 rounded-xl text-black text-sm md:text-base font-bold outline-none [color-scheme:light]" value={actionForm.reason} onChange={e => setActionForm({...actionForm, reason: e.target.value})}>
                                     <option value="">Select Reason</option>
                                     {STOP_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
                                 </select>
@@ -618,7 +531,7 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
                         {activeDrugAction.type === 'Shift' && (
                             <div className="flex flex-col gap-1 text-black">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Reason for Shifting</label>
-                                <select className="p-3 bg-white border border-gray-300 rounded-xl text-black font-bold outline-none [color-scheme:light]" value={actionForm.reason} onChange={e => setActionForm({...actionForm, reason: e.target.value})}>
+                                <select className="p-2.5 md:p-3 bg-white border border-gray-300 rounded-xl text-black text-sm md:text-base font-bold outline-none [color-scheme:light]" value={actionForm.reason} onChange={e => setActionForm({...actionForm, reason: e.target.value})}>
                                     <option value="">Select Reason</option>
                                     {SHIFT_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
                                 </select>
@@ -629,11 +542,11 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
                             <>
                                 <div className="flex flex-col gap-1 text-black">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">New Dosage</label>
-                                    <input type="text" placeholder="e.g. 500mg" className="p-3 bg-white border border-gray-300 rounded-xl text-black font-bold outline-none" value={actionForm.newDose} onChange={e => setActionForm({...actionForm, newDose: e.target.value})} />
+                                    <input type="text" placeholder="e.g. 500mg" className="p-2.5 md:p-3 bg-white border border-gray-300 rounded-xl text-black text-sm md:text-base font-bold outline-none" value={actionForm.newDose} onChange={e => setActionForm({...actionForm, newDose: e.target.value})} />
                                 </div>
                                 <div className="flex flex-col gap-1 text-black">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Reason for Adjustment</label>
-                                    <select className="p-3 bg-white border border-gray-300 rounded-xl text-black font-bold outline-none [color-scheme:light]" value={actionForm.reason} onChange={e => setActionForm({...actionForm, reason: e.target.value})}>
+                                    <select className="p-2.5 md:p-3 bg-white border border-gray-300 rounded-xl text-black text-sm md:text-base font-bold outline-none [color-scheme:light]" value={actionForm.reason} onChange={e => setActionForm({...actionForm, reason: e.target.value})}>
                                         <option value="">Select Reason</option>
                                         {DOSE_CHANGE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
                                     </select>
@@ -643,13 +556,13 @@ const MonitoringDetailModal: React.FC<MonitoringDetailModalProps> = ({ isOpen, o
 
                         <div className="flex flex-col gap-1 text-black">
                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Remarks / Details</label>
-                            <textarea className="p-3 bg-white border border-gray-300 rounded-xl text-black font-bold outline-none" rows={3} value={actionForm.remarks} onChange={e => setActionForm({...actionForm, remarks: e.target.value})} />
+                            <textarea className="p-2.5 md:p-3 bg-white border border-gray-300 rounded-xl text-black text-sm md:text-base font-bold outline-none" rows={3} value={actionForm.remarks} onChange={e => setActionForm({...actionForm, remarks: e.target.value})} />
                         </div>
                     </div>
 
-                    <div className="flex gap-3">
-                        <button onClick={() => setActiveDrugAction(null)} className="flex-1 py-4 text-gray-500 font-black uppercase text-xs tracking-widest hover:bg-gray-100 rounded-2xl transition-all">Cancel</button>
-                        <button onClick={handleDrugAction} disabled={loading} className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition-all">{loading ? 'Processing...' : 'Confirm Action'}</button>
+                    <div className="flex gap-2 md:gap-3">
+                        <button onClick={() => setActiveDrugAction(null)} className="flex-1 py-3 md:py-4 text-gray-500 font-black uppercase text-[10px] md:text-xs tracking-widest hover:bg-gray-100 rounded-xl md:rounded-2xl transition-all">Cancel</button>
+                        <button onClick={handleDrugAction} disabled={loading} className="flex-1 py-3 md:py-4 bg-blue-600 text-white rounded-xl md:rounded-2xl font-black uppercase text-[10px] md:text-xs tracking-widest shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition-all">{loading ? '...' : 'Confirm'}</button>
                     </div>
                 </div>
             </div>

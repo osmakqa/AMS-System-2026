@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { MonitoringPatient, MonitoringAntimicrobial, User, Prescription, PrescriptionStatus } from '../types';
 import { fetchPrescriptions, createMonitoringPatient } from '../services/dataService';
@@ -123,20 +122,20 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({ isOpen, onClose, user
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[150] p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden animate-fade-in" onClick={e => e.stopPropagation()}>
-        <header className="bg-blue-600 text-white p-5 flex justify-between items-center shrink-0">
-          <h3 className="text-lg font-bold uppercase tracking-tight">Add Patient from Requests</h3>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[150] p-0 md:p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-none md:rounded-2xl shadow-2xl w-full max-w-2xl h-full md:h-auto md:max-h-[85vh] flex flex-col overflow-hidden animate-fade-in" onClick={e => e.stopPropagation()}>
+        <header className="bg-blue-600 text-white p-4 md:p-5 flex justify-between items-center shrink-0">
+          <h3 className="text-md md:text-lg font-bold uppercase tracking-tight">Add Patient</h3>
           <button onClick={onClose} className="text-white/60 hover:text-white transition-colors"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50/50">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 bg-gray-50/50">
           {step === 'select-patient' && (
             <div className="space-y-4">
               <div className="relative">
                 <input 
                   type="text" 
-                  placeholder="Search patient name or hospital number..." 
+                  placeholder="Search name or hospital number..." 
                   className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm bg-white text-black"
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
@@ -148,15 +147,15 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({ isOpen, onClose, user
                   <button 
                     key={`${p.name}-${p.hospNo}`} 
                     onClick={() => handleSelectPatient(p)}
-                    className="flex justify-between items-center p-4 bg-white rounded-xl border border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-all text-left shadow-sm group"
+                    className="flex justify-between items-center p-3 md:p-4 bg-white rounded-xl border border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-all text-left shadow-sm group"
                   >
-                    <div>
-                      <div className="font-bold text-black group-hover:text-blue-700">{p.name}</div>
+                    <div className="overflow-hidden">
+                      <div className="font-bold text-black group-hover:text-blue-700 truncate">{p.name}</div>
                       <div className="text-xs text-gray-500 font-mono">{p.hospNo}</div>
                     </div>
-                    <div className="text-xs font-bold text-gray-400 uppercase tracking-widest">{p.requests.length} Request(s)</div>
+                    <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest shrink-0">{p.requests.length} Rx</div>
                   </button>
-                )) : <div className="text-center py-10 text-gray-400 italic">No patients found from previous requests.</div>}
+                )) : <div className="text-center py-10 text-gray-400 italic">No patients found.</div>}
               </div>
             </div>
           )}
@@ -166,17 +165,17 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({ isOpen, onClose, user
               <button onClick={() => setStep('select-patient')} className="text-sm font-bold text-blue-600 flex items-center gap-1 hover:underline mb-2">
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg> Change Patient
               </button>
-              <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-1">Select Medications to Monitor</h4>
+              <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-1">Select Medications</h4>
               <div className="space-y-2">
                 {currentPatientRequests.map(r => (
-                  <label key={r.id} className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all ${selectedMedIds.includes(r.id) ? 'bg-blue-50 border-blue-500' : 'bg-white border-gray-200'}`}>
+                  <label key={r.id} className={`flex items-center gap-3 md:gap-4 p-3 md:p-4 rounded-xl border cursor-pointer transition-all ${selectedMedIds.includes(r.id) ? 'bg-blue-50 border-blue-500' : 'bg-white border-gray-200'}`}>
                     <input type="checkbox" checked={selectedMedIds.includes(r.id)} onChange={() => toggleMed(r.id)} className="h-5 w-5 rounded text-blue-600 focus:ring-blue-500" />
-                    <div>
-                      <div className="font-bold text-black">{r.antimicrobial}</div>
-                      <div className="text-xs text-gray-500">{r.dose} • {r.frequency} • {r.duration} days</div>
+                    <div className="overflow-hidden">
+                      <div className="font-bold text-black truncate">{r.antimicrobial}</div>
+                      <div className="text-[10px] md:text-xs text-gray-500">{r.dose} • {r.frequency} • {r.duration}d</div>
                     </div>
-                    <div className="ml-auto">
-                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${r.status === PrescriptionStatus.APPROVED ? 'bg-green-50 text-green-700 border-green-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}`}>{r.status}</span>
+                    <div className="ml-auto hidden sm:block">
+                        <span className={`text-[8px] md:text-[10px] font-black uppercase px-2 py-0.5 rounded border ${r.status === PrescriptionStatus.APPROVED ? 'bg-green-50 text-green-700 border-green-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}`}>{r.status}</span>
                     </div>
                   </label>
                 ))}
@@ -184,9 +183,9 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({ isOpen, onClose, user
               <button 
                 disabled={selectedMedIds.length === 0} 
                 onClick={() => setStep('confirm')} 
-                className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg hover:bg-blue-700 disabled:bg-gray-300 transition-all"
+                className="w-full py-3 md:py-4 bg-blue-600 text-white rounded-xl font-bold shadow-lg hover:bg-blue-700 disabled:bg-gray-300 transition-all uppercase text-xs tracking-widest"
               >
-                Next: Confirm Details
+                Next: Location Details
               </button>
             </div>
           )}
@@ -196,11 +195,11 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({ isOpen, onClose, user
               <button onClick={() => setStep('select-meds')} className="text-sm font-bold text-blue-600 flex items-center gap-1 hover:underline">
                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg> Back
               </button>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1">
                   <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Ward</label>
                   <select 
-                    className="w-full p-2 rounded-lg border border-gray-300 text-sm bg-white text-black outline-none focus:ring-2 focus:ring-blue-500" 
+                    className="w-full p-3 rounded-lg border border-gray-300 text-sm bg-white text-black outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:light]" 
                     value={patientDetails.ward} 
                     onChange={e => setPatientDetails({...patientDetails, ward: e.target.value})}
                   >
@@ -211,7 +210,7 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({ isOpen, onClose, user
                 <div className="flex flex-col gap-1">
                   <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Bed Number</label>
                   <input 
-                    className="w-full p-2 rounded-lg border border-gray-300 text-sm bg-white text-black outline-none focus:ring-2 focus:ring-blue-500" 
+                    className="w-full p-3 rounded-lg border border-gray-300 text-sm bg-white text-black outline-none focus:ring-2 focus:ring-blue-500" 
                     placeholder="e.g. 4B" 
                     value={patientDetails.bed_number} 
                     onChange={e => setPatientDetails({...patientDetails, bed_number: e.target.value})} 
@@ -220,17 +219,16 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({ isOpen, onClose, user
               </div>
               <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
                   <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-3">Monitoring Summary</h4>
-                  <div className="text-sm space-y-1">
-                      <div className="flex justify-between"><span className="text-gray-600">Patient:</span><span className="font-bold text-black">{patientDetails.patient_name}</span></div>
+                  <div className="text-xs md:text-sm space-y-1.5">
+                      <div className="flex justify-between"><span className="text-gray-600">Patient:</span><span className="font-bold text-black truncate ml-4">{patientDetails.patient_name}</span></div>
                       <div className="flex justify-between"><span className="text-gray-600">Age/Sex:</span><span className="font-bold text-black">{patientDetails.age} / {patientDetails.sex}</span></div>
-                      <div className="flex justify-between"><span className="text-gray-600">SCr:</span><span className="font-bold text-black">{patientDetails.latest_creatinine}</span></div>
                       <div className="flex justify-between"><span className="text-gray-600">Meds:</span><span className="font-bold text-black">{selectedMedIds.length} Selected</span></div>
                   </div>
               </div>
               <button 
                 disabled={loading} 
                 onClick={handleConfirm} 
-                className="w-full py-4 bg-green-600 text-white rounded-xl font-bold shadow-lg hover:bg-green-700 transition-all flex items-center justify-center gap-2"
+                className="w-full py-4 bg-green-600 text-white rounded-xl font-bold shadow-lg hover:bg-green-700 transition-all flex items-center justify-center gap-2 uppercase text-xs tracking-widest"
               >
                 {loading ? 'Adding...' : 'Start Monitoring'}
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
