@@ -48,10 +48,13 @@ const getTodayDate = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-const FormGroup = ({ label, children, className = '' }: { label: string, children?: React.ReactNode, className?: string }) => (
+const FormGroup = ({ label, children, className = '', error }: { label: string, children?: React.ReactNode, className?: string, error?: string | boolean }) => (
   <div className={`flex flex-col gap-1 ${className}`}>
     <label className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">{label}</label>
     {children}
+    {error && typeof error === 'string' && (
+      <span className="text-[10px] font-bold text-red-500 mt-0.5">{error}</span>
+    )}
   </div>
 );
 
@@ -153,8 +156,8 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     mode: 'adult' as 'adult' | 'pediatric',
     diagnosis: '', sgpt: '', scr_mgdl: '', egfr_text: '',
     antimicrobial: '', drug_type: DrugType.MONITORED as DrugType, dose: '', frequency: '', duration: '',
-    route: 'IV', // Added Route
-    route_other: '', // For "Others (Specify)"
+    route: 'IV',
+    route_other: '',
     indication: '', basis_indication: '', selectedIndicationType: '' as 'Empiric' | 'Prophylactic' | 'Therapeutic' | '',
     specimen: '',
     resident_name: '', clinical_dept: '', service_resident_name: '', id_specialist: '',
@@ -269,36 +272,35 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
   }, [formData.patient_dob, formData.req_date, patientMode]);
 
   const drugLists = useMemo(() => {
-    // Helper to process monographs and consolidate Fluconazole
     const processList = (monographs: Record<string, any>) => {
-        const list: any[] = [];
-        const seenFluconazole = new Set();
+      const list: any[] = [];
+      const seenFluconazole = new Set();
 
-        Object.entries(monographs).forEach(([drugKey, meta]) => {
-            let label = drugKey;
-            let value = drugKey;
-            
-            // Consolidate Fluconazole entries for the dropdown
-            if (drugKey.toLowerCase().includes('fluconazole')) {
-                if (seenFluconazole.has('fluconazole')) return;
-                label = 'Fluconazole';
-                value = 'Fluconazole';
-                seenFluconazole.add('fluconazole');
-            }
+      Object.entries(monographs).forEach(([drugKey, meta]) => {
+        let label = drugKey;
+        let value = drugKey;
+        
+        // Consolidate Fluconazole entries for selection
+        if (drugKey.toLowerCase().includes('fluconazole')) {
+          if (seenFluconazole.has('fluconazole')) return;
+          label = 'Fluconazole';
+          value = 'Fluconazole';
+          seenFluconazole.add('fluconazole');
+        }
 
-            list.push({
-                value: value,
-                label: label,
-                type: meta.restricted ? DrugType.RESTRICTED : DrugType.MONITORED,
-                weightBased: meta.weightBased
-            });
+        list.push({
+          value: value,
+          label: label,
+          type: meta.restricted ? DrugType.RESTRICTED : DrugType.MONITORED,
+          weightBased: meta.weightBased
         });
-        return list.sort((a, b) => a.label.localeCompare(b.label));
+      });
+      return list.sort((a, b) => a.label.localeCompare(b.label));
     };
 
     return { 
-        adult: processList(ADULT_MONOGRAPHS), 
-        pediatric: processList(PEDIATRIC_MONOGRAPHS) 
+      adult: processList(ADULT_MONOGRAPHS), 
+      pediatric: processList(PEDIATRIC_MONOGRAPHS) 
     };
   }, []);
 
@@ -309,11 +311,11 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
         if (isActive) setRenalAnalysis(null);
         return;
       }
-      
-      // Determine which monograph key to use for Renal check
+
+      // Determine lookup key for Fluconazole based on route
       let lookupKey = formData.antimicrobial;
       if (lookupKey === 'Fluconazole') {
-          lookupKey = formData.route === 'IV' ? 'Fluconazole IV' : 'Fluconazole oral';
+        lookupKey = formData.route === 'IV' ? 'Fluconazole IV' : 'Fluconazole oral';
       }
 
       const monograph = patientMode === 'adult'
@@ -355,8 +357,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     
     // CUSTOM FLUCONAZOLE LOGIC
     if (currentDrug === 'Fluconazole') {
-        // IV is Restricted, Oral (or any other) is Monitored
-        drugType = formData.route === 'IV' ? DrugType.RESTRICTED : DrugType.MONITORED;
+      drugType = formData.route === 'IV' ? DrugType.RESTRICTED : DrugType.MONITORED;
     }
 
     setFormData(prev => ({
@@ -373,7 +374,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     
     let lookupKey = currentDrug;
     if (currentDrug === 'Fluconazole') {
-        lookupKey = formData.route === 'IV' ? 'Fluconazole IV' : 'Fluconazole oral';
+      lookupKey = formData.route === 'IV' ? 'Fluconazole IV' : 'Fluconazole oral';
     }
 
     const monograph = patientMode === 'adult' ? ADULT_MONOGRAPHS[lookupKey] : PEDIATRIC_MONOGRAPHS[lookupKey];
@@ -441,8 +442,16 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
       }
     });
 
+    // CLINICAL VALIDATION: Adult Age Check
+    if (patientMode === 'adult' && formData.age) {
+      const ageNum = parseFloat(formData.age);
+      if (!isNaN(ageNum) && ageNum < 18) {
+        errors.age = 'Adult patients must be 18 years or older. Switch to Pediatric mode for younger patients.';
+      }
+    }
+
     if (formData.route === 'Others' && !formData.route_other) {
-        errors.route_other = 'Please specify the custom route.';
+      errors.route_other = 'Please specify the custom route.';
     }
 
     if (patientMode === 'pediatric' && !formData.patient_dob) {
@@ -458,11 +467,9 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     }
 
     const selectedDrugMeta = drugLists[patientMode].find(d => d.value === formData.antimicrobial);
-    
-    // Check if it should be restricted based on logic or base type
     let isRestricted = selectedDrugMeta?.type === DrugType.RESTRICTED;
     if (formData.antimicrobial === 'Fluconazole') {
-        isRestricted = formData.route === 'IV';
+      isRestricted = formData.route === 'IV';
     }
 
     if (isRestricted) {
@@ -482,8 +489,11 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     if (!validateForm()) {
       const firstErrorField = Object.keys(validationErrors)[0] as string | undefined;
       if (firstErrorField) {
-        document.getElementById(firstErrorField)?.focus();
-        document.getElementById(firstErrorField)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const element = document.getElementById(firstErrorField);
+        if (element) {
+          element.focus();
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
       }
       return;
     }
@@ -665,22 +675,22 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                 <section className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
                     <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2">Patient Profile</h4>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <FormGroup label="Request Date"><Input error={!!validationErrors.req_date} type="date" name="req_date" value={formData.req_date} onChange={handleChange} /></FormGroup>
-                        <FormGroup label="Full Name (Last, First)" className="md:col-span-2"><Input error={!!validationErrors.patient_name} name="patient_name" value={formData.patient_name} onChange={handleChange} placeholder="e.g. Dela Cruz, Juan" /></FormGroup>
-                        <FormGroup label="Hospital Number"><Input error={!!validationErrors.hospital_number} name="hospital_number" value={formData.hospital_number} onChange={handleChange} placeholder="ID Number" /></FormGroup>
+                        <FormGroup label="Request Date" error={validationErrors.req_date}><Input id="req_date" error={!!validationErrors.req_date} type="date" name="req_date" value={formData.req_date} onChange={handleChange} /></FormGroup>
+                        <FormGroup label="Full Name (Last, First)" className="md:col-span-2" error={validationErrors.patient_name}><Input id="patient_name" error={!!validationErrors.patient_name} name="patient_name" value={formData.patient_name} onChange={handleChange} placeholder="e.g. Dela Cruz, Juan" /></FormGroup>
+                        <FormGroup label="Hospital Number" error={validationErrors.hospital_number}><Input id="hospital_number" error={!!validationErrors.hospital_number} name="hospital_number" value={formData.hospital_number} onChange={handleChange} placeholder="ID Number" /></FormGroup>
                         {patientMode === 'pediatric' ? (
                           <>
-                             <FormGroup label="Date of Birth"><Input error={!!validationErrors.patient_dob} type="date" name="patient_dob" value={formData.patient_dob} onChange={handleChange} /></FormGroup>
+                             <FormGroup label="Date of Birth" error={validationErrors.patient_dob}><Input id="patient_dob" error={!!validationErrors.patient_dob} type="date" name="patient_dob" value={formData.patient_dob} onChange={handleChange} /></FormGroup>
                              <FormGroup label="Calculated Age"><div className="h-[38px] flex items-center px-3 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-700">{formData.age}</div></FormGroup>
                           </>
                         ) : (
-                          <FormGroup label="Age"><Input error={!!validationErrors.age} type="number" name="age" value={formData.age} onChange={handleChange} /></FormGroup>
+                          <FormGroup label="Age" error={validationErrors.age}><Input id="age" error={!!validationErrors.age} type="number" name="age" value={formData.age} onChange={handleChange} /></FormGroup>
                         )}
-                        <FormGroup label="Sex"><Select error={!!validationErrors.sex} name="sex" value={formData.sex} onChange={handleChange}><option value="">Select</option><option value="Male">Male</option><option value="Female">Female</option></Select></FormGroup>
-                        <FormGroup label="Weight (kg)"><Input error={!!validationErrors.weight_kg} type="number" step="0.1" name="weight_kg" value={formData.weight_kg} onChange={handleChange} /></FormGroup>
-                        <FormGroup label="Height (cm)" className={patientMode === 'pediatric' ? '' : 'hidden'}><Input error={!!validationErrors.height_cm} type="number" step="0.1" name="height_cm" value={formData.height_cm} onChange={handleChange} /></FormGroup>
-                        <FormGroup label="Ward / Unit" className="md:col-span-2">
-                             <Select error={!!validationErrors.ward} value={isCustomWard ? 'Others' : formData.ward} onChange={(e) => { const v = e.target.value; if(v==='Others') setIsCustomWard(true); else { setIsCustomWard(false); setFormData(p=>({...p, ward: v})); } }}>
+                        <FormGroup label="Sex" error={validationErrors.sex}><Select id="sex" error={!!validationErrors.sex} name="sex" value={formData.sex} onChange={handleChange}><option value="">Select</option><option value="Male">Male</option><option value="Female">Female</option></Select></FormGroup>
+                        <FormGroup label="Weight (kg)" error={validationErrors.weight_kg}><Input id="weight_kg" error={!!validationErrors.weight_kg} type="number" step="0.1" name="weight_kg" value={formData.weight_kg} onChange={handleChange} /></FormGroup>
+                        <FormGroup label="Height (cm)" className={patientMode === 'pediatric' ? '' : 'hidden'} error={validationErrors.height_cm}><Input id="height_cm" error={!!validationErrors.height_cm} type="number" step="0.1" name="height_cm" value={formData.height_cm} onChange={handleChange} /></FormGroup>
+                        <FormGroup label="Ward / Unit" className="md:col-span-2" error={validationErrors.ward}>
+                             <Select id="ward" error={!!validationErrors.ward} value={isCustomWard ? 'Others' : formData.ward} onChange={(e) => { const v = e.target.value; if(v==='Others') setIsCustomWard(true); else { setIsCustomWard(false); setFormData(p=>({...p, ward: v})); } }}>
                                 <option value="">Select Ward</option>
                                 {WARDS.map(w => <option key={w} value={w}>{w}</option>)}
                                 <option value="Others">Others (Specify)</option>
@@ -694,20 +704,20 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                 <section className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
                     <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2">Clinical Data</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormGroup label="Diagnosis"><Input error={!!validationErrors.diagnosis} name="diagnosis" value={formData.diagnosis} onChange={handleChange} placeholder="Primary working diagnosis" /></FormGroup>
-                        <FormGroup label="Indication Type">
-                             <div className={`flex gap-2 p-1 rounded-lg ${validationErrors.selectedIndicationType ? 'border border-red-500 bg-red-50' : ''}`}>
+                        <FormGroup label="Diagnosis" error={validationErrors.diagnosis}><Input id="diagnosis" error={!!validationErrors.diagnosis} name="diagnosis" value={formData.diagnosis} onChange={handleChange} placeholder="Primary working diagnosis" /></FormGroup>
+                        <FormGroup label="Indication Type" error={validationErrors.selectedIndicationType}>
+                             <div id="selectedIndicationType" className={`flex gap-2 p-1 rounded-lg ${validationErrors.selectedIndicationType ? 'border border-red-500 bg-red-50' : ''}`}>
                                 {(['Empiric', 'Prophylactic', 'Therapeutic'] as const).map(ind => (
                                     <button key={ind} type="button" onClick={() => setFormData(p=>({...p, selectedIndicationType: ind}))} className={`flex-1 py-2 text-xs font-bold rounded-lg border transition-all ${formData.selectedIndicationType === ind ? 'bg-green-50 border-green-500 text-green-700 shadow-sm' : 'bg-white border-gray-200 text-gray-400 hover:border-gray-300'}`}>{ind}</button>
                                 ))}
                              </div>
                         </FormGroup>
-                        <FormGroup label="Basis for Indication" className="md:col-span-2"><Textarea error={!!validationErrors.basis_indication} name="basis_indication" value={formData.basis_indication} onChange={handleChange} rows={2} /></FormGroup>
+                        <FormGroup label="Basis for Indication" className="md:col-span-2" error={validationErrors.basis_indication}><Textarea id="basis_indication" error={!!validationErrors.basis_indication} name="basis_indication" value={formData.basis_indication} onChange={handleChange} rows={2} /></FormGroup>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-                        <FormGroup label="Serum Creatinine (µmol/L)">
+                        <FormGroup label="Serum Creatinine (µmol/L)" error={validationErrors.scr_mgdl}>
                              <div className="flex items-center gap-2">
-                                <Input error={!!validationErrors.scr_mgdl} type="number" name="scr_mgdl" value={formData.scr_mgdl} onChange={handleChange} disabled={scrNotAvailable} className="flex-1" />
+                                <Input id="scr_mgdl" error={!!validationErrors.scr_mgdl} type="number" name="scr_mgdl" value={formData.scr_mgdl} onChange={handleChange} disabled={scrNotAvailable} className="flex-1" />
                                 <label className="flex items-center gap-1.5 cursor-pointer whitespace-nowrap"><input type="checkbox" checked={scrNotAvailable} onChange={e => setScrNotAvailable(e.target.checked)} className="rounded border-gray-300 text-green-600" /><span className="text-[10px] font-bold text-gray-400 uppercase">Pending</span></label>
                              </div>
                         </FormGroup>
@@ -759,16 +769,16 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                         <button type="button" onClick={() => setShowMonograph(!showMonograph)} className="text-[10px] font-bold text-blue-600 hover:underline uppercase">{showMonograph ? 'Hide Monograph' : 'View Monograph'}</button>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <FormGroup label="Antimicrobial" className="md:col-span-2">
-                            <Select error={!!validationErrors.antimicrobial} name="antimicrobial" value={formData.antimicrobial} onChange={handleChange}>
+                        <FormGroup label="Antimicrobial" className="md:col-span-2" error={validationErrors.antimicrobial}>
+                            <Select id="antimicrobial" error={!!validationErrors.antimicrobial} name="antimicrobial" value={formData.antimicrobial} onChange={handleChange}>
                                 <option value="">Select Drug</option>
                                 {drugLists[patientMode].map(d => <option key={d.value} value={d.value}>{d.label} ({d.type})</option>)}
                             </Select>
                         </FormGroup>
                         <FormGroup label="Drug Type"><div className={`h-[38px] flex items-center justify-center px-3 rounded-lg text-xs font-black uppercase tracking-widest border ${formData.drug_type === DrugType.RESTRICTED ? 'bg-red-50 border-red-200 text-red-700' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>{formData.drug_type}</div></FormGroup>
                         
-                        <FormGroup label="Route">
-                            <Select error={!!validationErrors.route} name="route" value={formData.route} onChange={handleChange}>
+                        <FormGroup label="Route" error={validationErrors.route}>
+                            <Select id="route" error={!!validationErrors.route} name="route" value={formData.route} onChange={handleChange}>
                                 <option value="IV">IV</option>
                                 <option value="IM">IM</option>
                                 <option value="Oral">Oral</option>
@@ -776,15 +786,14 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                             </Select>
                         </FormGroup>
                         {formData.route === 'Others' && (
-                            /* Fixed: Removed unsupported 'error' prop from FormGroup */
-                            <FormGroup label="Specify Route">
-                                <Input error={!!validationErrors.route_other} name="route_other" value={formData.route_other} onChange={handleChange} placeholder="Enter route..." />
+                            <FormGroup label="Specify Route" error={validationErrors.route_other}>
+                                <Input id="route_other" error={!!validationErrors.route_other} name="route_other" value={formData.route_other} onChange={handleChange} placeholder="Enter route..." />
                             </FormGroup>
                         )}
                         
-                        <FormGroup label="Dose"><Input error={!!validationErrors.dose} name="dose" value={formData.dose} onChange={handleChange} placeholder="e.g. 1g" /></FormGroup>
-                        <FormGroup label="Frequency"><Input error={!!validationErrors.frequency} name="frequency" value={formData.frequency} onChange={handleChange} placeholder="e.g. q8h" /></FormGroup>
-                        <FormGroup label="Duration (Days)"><Input error={!!validationErrors.duration} name="duration" value={formData.duration} onChange={handleChange} placeholder="e.g. 7" /></FormGroup>
+                        <FormGroup label="Dose" error={validationErrors.dose}><Input id="dose" error={!!validationErrors.dose} name="dose" value={formData.dose} onChange={handleChange} placeholder="e.g. 1g" /></FormGroup>
+                        <FormGroup label="Frequency" error={validationErrors.frequency}><Input id="frequency" error={!!validationErrors.frequency} name="frequency" value={formData.frequency} onChange={handleChange} placeholder="e.g. q8h" /></FormGroup>
+                        <FormGroup label="Duration (Days)" error={validationErrors.duration}><Input id="duration" error={!!validationErrors.duration} name="duration" value={formData.duration} onChange={handleChange} placeholder="e.g. 7" /></FormGroup>
                     </div>
                     {showMonograph && (
                         <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm animate-fade-in max-h-48 overflow-y-auto text-sm text-gray-700" dangerouslySetInnerHTML={{ __html: monographHtml }} />
@@ -800,12 +809,12 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                 <section className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
                     <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2">Accountability</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormGroup label="Resident In-Charge"><Input error={!!validationErrors.resident_name} name="resident_name" value={formData.resident_name} onChange={handleChange} placeholder="Ordering physician" /></FormGroup>
-                        <FormGroup label="Clinical Department"><Select error={!!validationErrors.clinical_dept} name="clinical_dept" value={formData.clinical_dept} onChange={handleChange}><option value="">Select Dept</option>{CLINICAL_DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}</Select></FormGroup>
+                        <FormGroup label="Resident In-Charge" error={validationErrors.resident_name}><Input id="resident_name" error={!!validationErrors.resident_name} name="resident_name" value={formData.resident_name} onChange={handleChange} placeholder="Ordering physician" /></FormGroup>
+                        <FormGroup label="Clinical Department" error={validationErrors.clinical_dept}><Select id="clinical_dept" error={!!validationErrors.clinical_dept} name="clinical_dept" value={formData.clinical_dept} onChange={handleChange}><option value="">Select Dept</option>{CLINICAL_DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}</Select></FormGroup>
                         {formData.drug_type === DrugType.RESTRICTED && (
                             <>
-                                <FormGroup label="Service Resident"><Input error={!!validationErrors.service_resident_name} name="service_resident_name" value={formData.service_resident_name} onChange={handleChange} placeholder="IM/Pedia Resident" /></FormGroup>
-                                <FormGroup label="ID Specialist"><Select error={!!validationErrors.id_specialist} name="id_specialist" value={formData.id_specialist} onChange={handleChange}><option value="">Select Specialist</option>{(patientMode === 'adult' ? IDS_SPECIALISTS_ADULT : IDS_SPECIALISTS_PEDIATRIC).map(s => <option key={s} value={s}>{s}</option>)}</Select></FormGroup>
+                                <FormGroup label="Service Resident" error={validationErrors.service_resident_name}><Input id="service_resident_name" error={!!validationErrors.service_resident_name} name="service_resident_name" value={formData.service_resident_name} onChange={handleChange} placeholder="IM/Pedia Resident" /></FormGroup>
+                                <FormGroup label="ID Specialist" error={validationErrors.id_specialist}><Select id="id_specialist" error={!!validationErrors.id_specialist} name="id_specialist" value={formData.id_specialist} onChange={handleChange}><option value="">Select Specialist</option>{(patientMode === 'adult' ? IDS_SPECIALISTS_ADULT : IDS_SPECIALISTS_PEDIATRIC).map(s => <option key={s} value={s}>{s}</option>)}</Select></FormGroup>
                             </>
                         )}
                     </div>
