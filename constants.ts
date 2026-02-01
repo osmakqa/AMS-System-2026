@@ -62,6 +62,7 @@ export const WARDS = [
   "NON-SARI",
   "OB Gyne Ward",
   "Pedia 3 Pulmo (Hema Ward)",
+  "Pedia Cohort",
   "Pedia ICU",
   "Pedia ISO (4th)",
   "Pedia Isolation",
