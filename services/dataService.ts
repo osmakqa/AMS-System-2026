@@ -1,4 +1,3 @@
-
 import { db } from './firebaseClient';
 import { 
   collection, 
@@ -219,6 +218,16 @@ export const updateMonitoringPatient = async (id: string, updates: Partial<Monit
     }
   } catch (err: any) {
     console.error('Update Monitoring Patient error:', err);
+    throw err;
+  }
+};
+
+export const deleteMonitoringPatient = async (id: string) => {
+  try {
+    await deleteDoc(doc(db, 'monitoring_patients', id));
+    sendToGoogleSheet("Monitoring_Deleted", { id: id, timestamp: new Date().toISOString() });
+  } catch (err: any) {
+    console.error('Delete Monitoring Patient error:', err);
     throw err;
   }
 };

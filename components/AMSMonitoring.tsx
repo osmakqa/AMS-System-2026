@@ -1,12 +1,12 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
-import { MonitoringPatient, User, MonitoringAntimicrobial, AdminLogEntry } from '../types';
-import { updateMonitoringPatient } from '../services/dataService';
+import { MonitoringPatient, User, MonitoringAntimicrobial, AdminLogEntry, UserRole } from '../types';
+import { updateMonitoringPatient, deleteMonitoringPatient } from '../services/dataService';
 import { db } from '../services/firebaseClient';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import MonitoringDetailModal from './MonitoringDetailModal';
 import AddPatientModal from './AddPatientModal';
 import EditPatientModal from './EditPatientModal';
+import PasswordModal from './PasswordModal';
 import { WARDS } from '../constants';
 
 interface AMSMonitoringProps {
@@ -63,6 +63,10 @@ const AMSMonitoring: React.FC<AMSMonitoringProps> = ({ user }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedPatientIdInView, setSelectedPatientIdInView] = useState<string | null>(null);
   const [selectedPatientForEdit, setSelectedPatientForEdit] = useState<MonitoringPatient | null>(null);
+  
+  // Delete Confirmation State
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [patientToDelete, setPatientToDelete] = useState<MonitoringPatient | null>(null);
 
   // Real-time listener
   useEffect(() => {
@@ -139,11 +143,63 @@ const AMSMonitoring: React.FC<AMSMonitoringProps> = ({ user }) => {
     });
   }, [filteredPatients, sortConfig]);
 
+  const getCurrentUserPassword = (user: User | null) => {
+    if (!user) return 'osmak123';
+    if (user.role === UserRole.AMS_ADMIN) return 'ams123';
+    if (user.role === UserRole.RESIDENT) return 'doctor123';
+    if (user.role === UserRole.PHARMACIST) {
+      const lastName = user.name.split(',')[0].trim().toLowerCase().replace(/\s/g, '');
+      return `${lastName}123`;
+    }
+    if (user.role === UserRole.IDS) {
+      const parts = user.name.trim().split(' ');
+      const lastName = parts[parts.length - 1].toLowerCase();
+      return `${lastName}456`;
+    }
+    return 'osmak123';
+  };
+
+  const handleDeleteClick = (patient: MonitoringPatient) => {
+    setPatientToDelete(patient);
+    setIsPasswordModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!patientToDelete) return;
+    try {
+        await deleteMonitoringPatient(patientToDelete.id);
+        alert("Patient monitoring record deleted.");
+    } catch (err: any) {
+        alert("Failed to delete patient: " + err.message);
+    } finally {
+        setPatientToDelete(null);
+        setIsPasswordModalOpen(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center">
-            <div><h2 className="text-xl font-bold text-black">AMS Monitoring Dashboard</h2><p className="text-sm text-gray-500">Real-time antimicrobial surveillance.</p></div>
-            <button onClick={() => setIsAddModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold shadow-sm flex items-center gap-2 transition-colors"><svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>Add Patient</button>
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-black">AMS Monitoring Dashboard</h2>
+              <p className="text-sm text-gray-500">Real-time antimicrobial surveillance.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <input 
+                  type="text" 
+                  placeholder="Search..." 
+                  className="pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm bg-white text-black outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <svg className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              </div>
+              <button onClick={() => setIsAddModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold shadow-sm flex items-center gap-2 transition-colors whitespace-nowrap">
+                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
+                Add Patient
+              </button>
+            </div>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -158,11 +214,11 @@ const AMSMonitoring: React.FC<AMSMonitoringProps> = ({ user }) => {
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Patient</th>
-                            <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Ward/Bed</th>
-                            <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">DOT</th>
-                            <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Active Therapy</th>
-                            <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
+                            <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Patient</th>
+                            <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Ward/Bed</th>
+                            <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">DOT</th>
+                            <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider hidden md:table-cell">Active Therapy</th>
+                            <th className="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
@@ -175,24 +231,27 @@ const AMSMonitoring: React.FC<AMSMonitoringProps> = ({ user }) => {
                                   className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
                                   onClick={() => setSelectedPatientIdInView(p.id)}
                                 >
-                                    <td className="px-6 py-4">
+                                    <td className="px-4 py-4">
                                         <div className="flex items-center gap-2">
-                                            <div className="font-bold text-black group-hover:text-blue-700 transition-colors">{p.patient_name}</div>
-                                            {(flags.hasMissedDoses || flags.hasRenalAlert || flags.hasProlongedTherapy) && <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" title="Red Flag" />}
+                                            <div className="font-bold text-black group-hover:text-blue-700 transition-colors truncate max-w-[120px] md:max-w-none">{p.patient_name}</div>
+                                            {(flags.hasMissedDoses || flags.hasRenalAlert || flags.hasProlongedTherapy) && <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0" title="Red Flag" />}
                                         </div>
-                                        <div className="text-xs text-gray-500 font-mono">{p.hospital_number}</div>
+                                        <div className="text-[10px] text-gray-500 font-mono">{p.hospital_number}</div>
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-black">{p.ward} • {p.bed_number}</td>
-                                    <td className="px-6 py-4 font-bold text-sm text-gray-700">{dot > 0 ? `Day ${dot}` : '-'}</td>
-                                    <td className="px-6 py-4 text-xs">
+                                    <td className="px-4 py-4 text-xs md:text-sm text-black whitespace-nowrap">{p.ward} • {p.bed_number}</td>
+                                    <td className="px-4 py-4 font-bold text-xs md:text-sm text-gray-700 whitespace-nowrap">{dot > 0 ? `Day ${dot}` : '-'}</td>
+                                    <td className="px-4 py-4 text-[10px] hidden md:table-cell">
                                         <div className="flex flex-wrap gap-1">
                                             {p.antimicrobials?.filter(a => a && a.status === 'Active').map((a, i) => <span key={i} className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-bold border border-blue-200">{a.drug_name}</span>)}
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                                        <div className="flex justify-end gap-2">
+                                    <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                                        <div className="flex justify-end gap-1 md:gap-2">
                                             <button onClick={() => setSelectedPatientForEdit(p)} className="p-1.5 rounded-full text-gray-400 hover:text-blue-600 bg-gray-50 hover:bg-white border border-gray-100 transition-colors" title="Edit Patient Details">
                                                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                            </button>
+                                            <button onClick={() => handleDeleteClick(p)} className="p-1.5 rounded-full text-gray-400 hover:text-red-600 bg-gray-50 hover:bg-white border border-gray-100 transition-colors" title="Delete Patient Record">
+                                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                             </button>
                                             <button onClick={() => setSelectedPatientIdInView(p.id)} className="p-1.5 rounded-full text-gray-400 hover:text-blue-600 bg-gray-50 hover:bg-white border border-gray-100 transition-colors" title="View Full Details">
                                                 <KpiIcon path="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
@@ -202,6 +261,11 @@ const AMSMonitoring: React.FC<AMSMonitoringProps> = ({ user }) => {
                                 </tr>
                             );
                         })}
+                        {sortedPatients.length === 0 && (
+                            <tr>
+                                <td colSpan={5} className="px-6 py-10 text-center text-gray-400 italic">No patients found matches the current filters.</td>
+                            </tr>
+                        )}
                     </tbody>
                 </table>
             </div>
@@ -210,6 +274,16 @@ const AMSMonitoring: React.FC<AMSMonitoringProps> = ({ user }) => {
         {isAddModalOpen && <AddPatientModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} user={user} onSuccess={() => setIsAddModalOpen(false)} />}
         {patientInView && <MonitoringDetailModal isOpen={!!patientInView} onClose={() => setSelectedPatientIdInView(null)} patient={patientInView} user={user} onUpdate={() => {}} />}
         {selectedPatientForEdit && <EditPatientModal isOpen={!!selectedPatientForEdit} onClose={() => setSelectedPatientForEdit(null)} patient={selectedPatientForEdit} user={user} />}
+        
+        {isPasswordModalOpen && patientToDelete && (
+            <PasswordModal 
+                isOpen={isPasswordModalOpen} 
+                onClose={() => { setIsPasswordModalOpen(false); setPatientToDelete(null); }} 
+                onConfirm={handleConfirmDelete} 
+                title={`Delete Monitoring for ${patientToDelete.patient_name}?`}
+                expectedPassword={getCurrentUserPassword(user)}
+            />
+        )}
     </div>
   );
 };
