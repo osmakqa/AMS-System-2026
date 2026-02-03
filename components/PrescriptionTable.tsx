@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Prescription, PrescriptionStatus, ActionType } from '../types';
 
@@ -148,7 +149,7 @@ const PrescriptionTable: React.FC<PrescriptionTableProps> = ({ items, onAction, 
                   {patientSpan > 0 ? (
                     <td 
                       rowSpan={patientSpan} 
-                      className={`px-6 py-4 whitespace-nowrap bg-white align-top border-r border-gray-100 ${patientSpan > 1 ? 'shadow-[inset_-2px_0_4px_-2px_rgba(0,0,0,0.05)]' : ''}`}
+                      className={`px-6 py-4 whitespace-nowrap bg-white align-top border-r border-gray-100 ${patientSpan > 1 ? 'shadow-[inset_-2px_0_4_4px_-2px_rgba(0,0,0,0.05)]' : ''}`}
                     >
                       <div className={`text-sm font-bold ${isDeleted ? 'text-gray-400' : 'text-gray-900'}`}>{item.patient_name}</div>
                       <div className="text-xs font-mono text-gray-400">{item.hospital_number}</div>
@@ -193,7 +194,10 @@ const PrescriptionTable: React.FC<PrescriptionTableProps> = ({ items, onAction, 
                                 )}
                                 
                                 {statusType === 'ALL_VIEW' && (
-                                <button className="text-gray-400 text-xs font-medium cursor-not-allowed italic" disabled>View Only</button>
+                                  <button onClick={() => onAction(item.id, ActionType.ADMIN_EDIT)} className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1">
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                      Edit
+                                  </button>
                                 )}
 
                                 <button onClick={() => onAction(item.id, ActionType.DELETE)} className="text-gray-400 hover:text-red-600 p-1.5 hover:bg-gray-100 rounded-full transition-colors" title="Delete">

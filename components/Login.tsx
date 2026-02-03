@@ -1,6 +1,8 @@
-import React, { useState, useMemo } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { PHARMACISTS, IDS_SPECIALISTS, LOGO_URL } from '../constants';
 import { User, UserRole } from '../types';
+import { fetchUsers } from '../services/dataService';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -15,19 +17,32 @@ const Login: React.FC<LoginProps> = ({ onLogin, onOpenManual, onOpenWorkflow, on
   const [selectedUser, setSelectedUser] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [usersDb, setUsersDb] = useState<User[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+        const data = await fetchUsers();
+        setUsersDb(data);
+    };
+    load();
+  }, []);
 
   const getExpectedPassword = () => {
+    // 1. Check if user exists in Firestore with a custom password
+    const userId = (role === 'AMS') ? 'ams-admin' : (role === 'RESIDENT' ? 'resident' : selectedUser);
+    const dbUser = usersDb.find(u => u.id === userId);
+    if (dbUser && dbUser.password) return dbUser.password;
+
+    // 2. Legacy hardcoded logic
     if (role === 'AMS') return 'ams123';
     if (role === 'RESIDENT') return 'doctor123';
     
     if (role === 'PHARMACIST' && selectedUser) {
-      // Format: "Dela Cruz, Corazon L." -> "delacruz123" (removes spaces)
       const lastName = selectedUser.split(',')[0].trim().toLowerCase().replace(/\s/g, '');
       return `${lastName}123`;
     }
     
     if (role === 'IDS' && selectedUser) {
-      // Format: "Dr. Christopher John Tibayan" -> "tibayan456"
       const parts = selectedUser.trim().split(' ');
       const lastName = parts[parts.length - 1].toLowerCase();
       return `${lastName}456`;
@@ -51,17 +66,20 @@ const Login: React.FC<LoginProps> = ({ onLogin, onOpenManual, onOpenWorkflow, on
       return;
     }
 
+    const userId = (role === 'AMS') ? 'ams-admin' : (role === 'RESIDENT' ? 'resident' : selectedUser);
+    const dbUser = usersDb.find(u => u.id === userId);
+
     if (role === 'AMS') {
-      onLogin({ id: 'ams-admin', name: 'AMS Admin', role: UserRole.AMS_ADMIN });
+      onLogin(dbUser || { id: 'ams-admin', name: 'AMS Admin', role: UserRole.AMS_ADMIN });
       return;
     }
 
     if (role === 'RESIDENT') {
-       onLogin({ id: 'resident', name: 'Resident', role: UserRole.RESIDENT });
+       onLogin(dbUser || { id: 'resident', name: 'Resident', role: UserRole.RESIDENT });
        return;
     }
 
-    onLogin({ 
+    onLogin(dbUser || { 
       id: selectedUser, 
       name: selectedUser, 
       role: role === 'IDS' ? UserRole.IDS : UserRole.PHARMACIST 
@@ -162,7 +180,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onOpenManual, onOpenWorkflow, on
           </form>
 
            <div className="mt-8 space-y-3 pt-6 border-t border-gray-100">
-             {/* Option 2: Service Card Style Button - Submit Request */}
              <button 
                className="w-full flex items-center p-3 border-2 border-green-600 bg-green-50 rounded-xl hover:bg-green-100 transition-all shadow-sm hover:shadow-md group text-left"
                onClick={onOpenAntimicrobialRequestForm}
@@ -179,7 +196,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onOpenManual, onOpenWorkflow, on
                 </div>
              </button>
 
-             {/* New AMS Audit Button - Only Visible for AMS Role */}
              {role === 'AMS' && (
                 <button 
                   className="w-full flex items-center p-3 border-2 border-teal-500 bg-teal-50 rounded-xl hover:bg-teal-100 transition-all shadow-sm hover:shadow-md group text-left"

@@ -1,3 +1,4 @@
+
 import { db } from './firebaseClient';
 import { 
   collection, 
@@ -11,9 +12,10 @@ import {
   limit,
   where,
   getDoc,
+  setDoc,
   Timestamp 
 } from 'firebase/firestore';
-import { Prescription, PrescriptionStatus, AMSAudit, MonitoringPatient } from '../types';
+import { Prescription, PrescriptionStatus, AMSAudit, MonitoringPatient, User } from '../types';
 import { GOOGLE_SHEET_WEB_APP_URL } from '../constants';
 
 /**
@@ -47,6 +49,32 @@ const sendToGoogleSheet = async (sheetName: string, data: any) => {
     });
   } catch (error) {
     console.error(`Google Sheet backup error:`, error);
+  }
+};
+
+// --- USER FUNCTIONS ---
+
+export const fetchUsers = async (): Promise<User[]> => {
+  try {
+    const q = query(collection(db, 'users'));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      ...doc.data(),
+      id: doc.id
+    })) as User[];
+  } catch (err) {
+    console.error('Fetch users error:', err);
+    return [];
+  }
+};
+
+export const updateUserAccount = async (userId: string, data: Partial<User>) => {
+  try {
+    const docRef = doc(db, 'users', userId);
+    await setDoc(docRef, data, { merge: true });
+  } catch (err) {
+    console.error('Update user error:', err);
+    throw err;
   }
 };
 

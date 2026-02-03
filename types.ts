@@ -10,6 +10,7 @@ export interface User {
   id: string;
   name: string;
   role: UserRole;
+  password?: string; // Persistent password
 }
 
 export enum PrescriptionStatus {
@@ -33,7 +34,9 @@ export enum ActionType {
   REVERSE_TO_APPROVE = 'REVERSE_TO_APPROVE',
   REVERSE_TO_DISAPPROVE = 'REVERSE_TO_DISAPPROVE',
   SAVE_FINDINGS = 'SAVE_FINDINGS',
-  RESEND = 'RESEND'
+  RESEND = 'RESEND',
+  ADMIN_EDIT = 'ADMIN_EDIT',
+  ADMIN_PASSWORD_FOR_TAB = 'ADMIN_PASSWORD_FOR_TAB'
 }
 
 export interface RequestFinding {

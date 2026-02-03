@@ -197,6 +197,8 @@ const DetailModal: React.FC<DetailModalProps> = ({ isOpen, onClose, item, role, 
         }
       } else if (action === ActionType.SAVE_FINDINGS) {
         onAction(item.id, action, { findings });
+      } else if (action === ActionType.ADMIN_EDIT) {
+        onAction(item.id, action);
       } else {
         onAction(item.id, action); 
       }
@@ -594,6 +596,9 @@ const DetailModal: React.FC<DetailModalProps> = ({ isOpen, onClose, item, role, 
                  )}
                  {isReviewer && (
                     <button onClick={() => handleAction(ActionType.SAVE_FINDINGS)} className="flex-1 md:flex-none bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg font-bold shadow-sm transition-colors text-xs md:text-sm">Update Findings</button>
+                 )}
+                 {role === UserRole.AMS_ADMIN && (
+                    <button onClick={() => handleAction(ActionType.ADMIN_EDIT)} className="flex-1 md:flex-none bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg font-bold shadow-sm transition-colors text-xs md:text-sm">Edit Clinical Details</button>
                  )}
                  <button onClick={onClose} className="flex-1 md:flex-none px-5 py-2.5 bg-white hover:bg-gray-100 text-gray-700 rounded-lg font-bold transition-colors border border-gray-300 shadow-sm text-xs md:text-sm">Close</button>
              </div>

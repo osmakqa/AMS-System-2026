@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import Login from './components/Login';
 import Layout from './components/Layout';
@@ -15,13 +16,16 @@ import AMSAuditForm from './components/AMSAuditForm';
 import AMSAuditTable from './components/AMSAuditTable'; 
 import AMSAuditDetailModal from './components/AMSAuditDetailModal'; 
 import AMSMonitoring from './components/AMSMonitoring'; 
+import PasswordManager from './components/PasswordManager';
+import SettingsModal from './components/SettingsModal';
 import { User, UserRole, Prescription, PrescriptionStatus, ActionType, DrugType, AMSAudit, MonitoringPatient } from './types';
 import { 
   fetchPrescriptions, 
   updatePrescriptionStatus, 
   createPrescription,
   deletePrescription,
-  fetchAudits 
+  fetchAudits,
+  fetchUsers
 } from './services/dataService';
 import { db } from './services/firebaseClient';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
@@ -29,7 +33,7 @@ import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 const tabsConfig: Record<UserRole, string[]> = {
   [UserRole.PHARMACIST]: ['Pending', 'History', 'AMS Monitoring', 'Data Analysis'], 
   [UserRole.IDS]: ['Pending', 'History'],
-  [UserRole.AMS_ADMIN]: ['Antimicrobials', 'AMS Audit', 'Data Analysis'],
+  [UserRole.AMS_ADMIN]: ['Antimicrobials', 'AMS Audit', 'Data Analysis', 'Password Manager'],
   [UserRole.RESIDENT]: ['Disapproved'],
 };
 
@@ -52,7 +56,10 @@ const TabIcon = ({ tabName }: { tabName: string }) => {
       path = <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />;
       break;
     case 'Disapproved':
-        path = <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.415L11 9.586V6z" clipRule="evenodd" />
+        path = <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.415L11 9.586V6z" clipRule="evenodd" />;
+        break;
+    case 'Password Manager':
+        path = <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />;
         break;
     default:
       path = <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />;
@@ -82,6 +89,7 @@ function App() {
   const [isUserManualOpen, setIsUserManualOpen] = useState(false);
   const [isWorkflowModalOpen, setIsWorkflowModalOpen] = useState(false);
   const [isAntimicrobialRequestFormOpen, setIsAntimicrobialRequestFormOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
   const [requestToEdit, setRequestToEdit] = useState<Prescription | null>(null);
   
@@ -104,7 +112,6 @@ function App() {
     const qRequests = query(collection(db, 'requests'), orderBy('req_date', 'desc'));
     const unsubscribeRequests = onSnapshot(qRequests, (snapshot) => {
       const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Prescription[];
-      // Keep everything in state, handle visibility at filtering level
       setData(items);
     }, (err) => {
       setDbError(err.message);
@@ -174,6 +181,12 @@ function App() {
         return;
     }
 
+    if (type === ActionType.ADMIN_EDIT) {
+        setPendingAction({ id, type });
+        setIsPasswordModalOpen(true);
+        return;
+    }
+
     switch (type) {
       case ActionType.APPROVE:
       case ActionType.REVERSE_TO_APPROVE:
@@ -198,20 +211,42 @@ function App() {
   const handleConfirmPassword = () => {
     setIsPasswordModalOpen(false);
     if (!pendingAction) return;
+
+    if (pendingAction.type === ActionType.ADMIN_PASSWORD_FOR_TAB) {
+        setActiveTab('Password Manager');
+        setPendingAction(null);
+        return;
+    }
+
+    if (pendingAction.type === ActionType.ADMIN_EDIT) {
+        const itemToEdit = data.find(i => i.id === pendingAction.id);
+        if (itemToEdit) {
+            setRequestToEdit(itemToEdit);
+            setIsAntimicrobialRequestFormOpen(true);
+        }
+        setPendingAction(null);
+        return;
+    }
+
     executeAction(pendingAction.id, pendingAction.type);
     setPendingAction(null);
   };
 
-  const getCurrentUserPassword = (user: User | null) => {
-    if (!user) return 'osmak123';
-    if (user.role === UserRole.AMS_ADMIN) return 'ams123';
-    if (user.role === UserRole.RESIDENT) return 'doctor123';
-    if (user.role === UserRole.PHARMACIST) {
-      const lastName = user.name.split(',')[0].trim().toLowerCase().replace(/\s/g, '');
+  const getCurrentUserPassword = (u: User | null) => {
+    if (!u) return 'osmak123';
+    
+    // Check if user object has a custom password (persistent)
+    if (u.password) return u.password;
+
+    // LEGACY LOGIC
+    if (u.role === UserRole.AMS_ADMIN) return 'ams123';
+    if (u.role === UserRole.RESIDENT) return 'doctor123';
+    if (u.role === UserRole.PHARMACIST) {
+      const lastName = u.name.split(',')[0].trim().toLowerCase().replace(/\s/g, '');
       return `${lastName}123`;
     }
-    if (user.role === UserRole.IDS) {
-      const parts = user.name.trim().split(' ');
+    if (u.role === UserRole.IDS) {
+      const parts = u.name.trim().split(' ');
       const lastName = parts[parts.length - 1].toLowerCase();
       return `${lastName}456`;
     }
@@ -234,7 +269,7 @@ function App() {
       const updates: { [key: string]: any } = {};
       let statusToUpdate: PrescriptionStatus | null = null;
       
-      if (![ActionType.FORWARD_IDS, ActionType.DELETE, ActionType.SAVE_FINDINGS, ActionType.RESEND].includes(type)) {
+      if (![ActionType.FORWARD_IDS, ActionType.DELETE, ActionType.SAVE_FINDINGS, ActionType.RESEND, ActionType.ADMIN_EDIT].includes(type)) {
         if (user.role === UserRole.PHARMACIST) updates.dispensed_by = user.name;
         else if (user.role === UserRole.IDS) updates.id_specialist = user.name;
       }
@@ -265,7 +300,7 @@ function App() {
           break;
         case ActionType.DELETE:
           await deletePrescription(id);
-          return; // Early return as deletePrescription handles its own logic
+          return; 
         case ActionType.RESEND:
           statusToUpdate = PrescriptionStatus.PENDING;
           updates.ids_approved_at = null; updates.ids_disapproved_at = null;
@@ -283,8 +318,21 @@ function App() {
     setIsSubmitting(true);
     try {
       if (formData.id) {
-          await updatePrescriptionStatus(formData.id, PrescriptionStatus.PENDING, formData);
-          alert("Request Updated and Resent successfully!");
+          const currentItem = data.find(i => i.id === formData.id);
+          const newStatus = user?.role === UserRole.AMS_ADMIN ? (currentItem?.status || PrescriptionStatus.PENDING) : PrescriptionStatus.PENDING;
+          
+          const payload = { ...formData };
+          // If AMS ADMIN: DO NOT overwrite action timestamps
+          if (user?.role === UserRole.AMS_ADMIN) {
+              delete payload.dispensed_date;
+              delete payload.ids_approved_at;
+              delete payload.ids_disapproved_at;
+              delete payload.created_at;
+              delete payload.req_date; // Keep requested date as original
+          }
+
+          await updatePrescriptionStatus(formData.id, newStatus, payload);
+          alert("Request Updated successfully!");
       } else {
           await createPrescription(formData); 
           alert("Antimicrobial Request submitted successfully!");
@@ -298,6 +346,22 @@ function App() {
     }
   };
 
+  const handleTabSelection = (tab: string) => {
+    if (tab === 'Password Manager' && user?.role === UserRole.AMS_ADMIN) {
+        setPendingAction({ id: 'tab-security', type: ActionType.ADMIN_PASSWORD_FOR_TAB });
+        setIsPasswordModalOpen(true);
+        return;
+    }
+    
+    setActiveTab(tab); 
+    if(tab === 'History' || tab === 'Antimicrobials') {
+      setHistoryStatusFilter(user?.role === UserRole.PHARMACIST ? 'All' : 'Approved');
+      setHistoryAntimicrobialFilter('All');
+      setHistorySearchQuery('');
+      setDrugTypeFilter('All');
+    }
+  };
+
   const statusMatches = (itemStatus: string, targetStatus: PrescriptionStatus) => {
     return itemStatus?.toLowerCase().trim() === targetStatus.toLowerCase();
   };
@@ -305,7 +369,6 @@ function App() {
   const getFilteredDataForCurrentView = () => {
     let items = data;
 
-    // Standard behavior: Exclude deleted from regular views
     if (user?.role !== UserRole.AMS_ADMIN || activeTab !== 'Antimicrobials') {
        items = items.filter(i => i.status !== PrescriptionStatus.DELETED);
     }
@@ -320,7 +383,6 @@ function App() {
     }
 
     if (activeTab === 'History') {
-      // Common History logic for Pharmacist and IDS
       if (user?.role === UserRole.PHARMACIST) {
         if (historyStatusFilter === 'All') items = items.filter(i => !statusMatches(i.status, PrescriptionStatus.PENDING));
         else if (historyStatusFilter === 'Approved') items = items.filter(i => statusMatches(i.status, PrescriptionStatus.APPROVED) && i.drug_type === DrugType.MONITORED);
@@ -329,7 +391,6 @@ function App() {
         else if (historyStatusFilter === 'Approved by ID') items = items.filter(i => statusMatches(i.status, PrescriptionStatus.APPROVED) && i.drug_type === DrugType.RESTRICTED);
         else items = [];
 
-        // Apply History Drug Type Filter for Pharmacist
         if (drugTypeFilter === 'Monitored') items = items.filter(i => i.drug_type === DrugType.MONITORED);
         else if (drugTypeFilter === 'Restricted') items = items.filter(i => i.drug_type === DrugType.RESTRICTED);
       } else if (user?.role === UserRole.IDS) {
@@ -339,7 +400,6 @@ function App() {
         else items = [];
       }
 
-      // Apply Search Filter
       if (historySearchQuery) {
         const q = historySearchQuery.toLowerCase().trim();
         items = items.filter(i => 
@@ -350,7 +410,6 @@ function App() {
         );
       }
 
-      // Apply Antimicrobial Filter
       if (historyAntimicrobialFilter !== 'All') {
         items = items.filter(i => i.antimicrobial === historyAntimicrobialFilter);
       }
@@ -375,9 +434,9 @@ function App() {
       switch (activeTab) {
         case 'Data Analysis': return data.filter(i => i.status !== PrescriptionStatus.DELETED); 
         case 'Antimicrobials': 
-          // Default: show everything except deleted unless user changes status filter (handled in renderContent)
           return items;
         case 'AMS Audit': return []; 
+        case 'Password Manager': return [];
       }
     }
 
@@ -390,8 +449,8 @@ function App() {
   
   const FilterHeader = () => {
     const showFilters = user?.role === UserRole.RESIDENT || 
-        (user?.role !== UserRole.AMS_ADMIN && activeTab !== 'Pending' && activeTab !== 'Data Analysis' && activeTab !== 'AMS Monitoring') || 
-        (user?.role === UserRole.AMS_ADMIN && (activeTab !== 'Data Analysis' && activeTab !== 'AMS Audit'));
+        (user?.role !== UserRole.AMS_ADMIN && activeTab !== 'Pending' && activeTab !== 'Data Analysis' && activeTab !== 'AMS Monitoring' && activeTab !== 'Password Manager') || 
+        (user?.role === UserRole.AMS_ADMIN && (activeTab !== 'Data Analysis' && activeTab !== 'AMS Audit' && activeTab !== 'Password Manager'));
 
     if (!showFilters) return null;
 
@@ -460,7 +519,6 @@ function App() {
             </div>
         </div>
 
-        {/* Search and Advanced Filters for History Tab */}
         {activeTab === 'History' && (
              <div className="flex flex-col md:flex-row gap-4 pt-3 border-t border-gray-100">
                 <div className="flex-1 relative">
@@ -498,6 +556,10 @@ function App() {
           <p className="bg-red-50 p-4 rounded border border-red-100 font-mono text-sm break-words">{dbError}</p>
         </div>
       );
+    }
+
+    if (activeTab === 'Password Manager' && user?.role === UserRole.AMS_ADMIN) {
+        return <PasswordManager />;
     }
 
     if (activeTab === 'AMS Audit' && user?.role === UserRole.AMS_ADMIN) {
@@ -544,21 +606,16 @@ function App() {
         if (historyStatusFilter === 'For IDS Approval') tableStatusType = PrescriptionStatus.FOR_IDS_APPROVAL;
         return <PrescriptionTable items={viewData} onAction={handleActionClick} onView={handleViewDetails} statusType={tableStatusType} isHistoryView={true} />;
       case 'Data Analysis':
-        // Crucial: Exclude deleted data from analysis
         const activeData = data.filter(i => i.status !== PrescriptionStatus.DELETED);
         return <StatsChart data={activeData} allData={activeData} auditData={auditData} monitoringData={monitoringData} role={user?.role} selectedMonth={selectedMonth} onMonthChange={setSelectedMonth} selectedYear={selectedYear} onYearChange={setSelectedYear} />;
       case 'Antimicrobials':
          let amsItems = viewData;
-         // For AMS Admin, viewData already handles keeping deleted records if necessary.
-         // Let's refine based on the drugTypeFilter AND status filter
          if (drugTypeFilter === 'Monitored') amsItems = amsItems.filter(i => i.drug_type === DrugType.MONITORED);
          else if (drugTypeFilter === 'Restricted') amsItems = amsItems.filter(i => i.drug_type === DrugType.RESTRICTED);
          
-         // In AMS view, the "History Status Filter" behaves as a bucket selector
          if (historyStatusFilter === 'Deleted') {
             amsItems = amsItems.filter(i => i.status === PrescriptionStatus.DELETED);
          } else if (historyStatusFilter === 'All') {
-             // Do nothing, show everything (Active + Deleted)
          } else {
             amsItems = amsItems.filter(i => i.status !== PrescriptionStatus.DELETED);
          }
@@ -601,22 +658,29 @@ function App() {
       <WorkflowModal isOpen={isWorkflowModalOpen} onClose={() => setIsWorkflowModalOpen(false)} />
       <AntimicrobialRequestForm isOpen={isAntimicrobialRequestFormOpen} onClose={() => { setIsAntimicrobialRequestFormOpen(false); setRequestToEdit(null); }} onSubmit={handleFormSubmission} loading={isSubmitting} initialData={requestToEdit} />
       <AMSAuditForm isOpen={isAMSAuditFormOpen} initialData={selectedAuditToEdit} onClose={() => { setIsAMSAuditFormOpen(false); setSelectedAuditToEdit(null); }} />
-      {/* Fix: Removed non-existent loadAudits function. Data updates are handled automatically by the onSnapshot real-time listener. */}
       <AMSAuditDetailModal isOpen={!!selectedAuditForView} onClose={() => setSelectedAuditForView(null)} audit={selectedAuditForView} />
+      
+      {user && (user.role === UserRole.PHARMACIST || user.role === UserRole.IDS) && (
+          <SettingsModal 
+            isOpen={isSettingsOpen} 
+            onClose={() => setIsSettingsOpen(false)} 
+            user={user} 
+            onPasswordChange={(newPass) => setUser({ ...user, password: newPass })}
+          />
+      )}
 
       {!user ? (
         <Login onLogin={handleLogin} onOpenManual={() => setIsUserManualOpen(false)} onOpenWorkflow={() => setIsWorkflowModalOpen(true)} onOpenAntimicrobialRequestForm={() => { setRequestToEdit(null); setIsAntimicrobialRequestFormOpen(true); }} onOpenAuditForm={() => { setSelectedAuditToEdit(null); setIsAMSAuditFormOpen(true); }} />
       ) : (
         <>
-          <Layout user={user} onLogout={handleLogout} tabs={currentTabs} activeTab={activeTab} onTabChange={(tab) => { 
-              setActiveTab(tab); 
-              if(tab === 'History' || tab === 'Antimicrobials') {
-                setHistoryStatusFilter(user?.role === UserRole.PHARMACIST ? 'All' : 'Approved');
-                setHistoryAntimicrobialFilter('All');
-                setHistorySearchQuery('');
-                setDrugTypeFilter('All'); // Reset drug type filter when switching tabs
-              }
-          }}>
+          <Layout 
+            user={user} 
+            onLogout={handleLogout} 
+            onOpenSettings={() => setIsSettingsOpen(true)}
+            tabs={currentTabs} 
+            activeTab={activeTab} 
+            onTabChange={handleTabSelection}
+          >
             <PasswordModal isOpen={isPasswordModalOpen} onClose={() => setIsPasswordModalOpen(false)} onConfirm={handleConfirmPassword} expectedPassword={getCurrentUserPassword(user)} />
             <DisapproveModal isOpen={isDisapproveModalOpen} onClose={() => setIsDisapproveModalOpen(false)} onSubmit={handleDisapproveSubmit} loading={isSubmitting} />
             <DetailModal isOpen={!!selectedItemForView} onClose={() => setSelectedItemForView(null)} item={selectedItemForView} role={user.role} userName={user.name} onAction={handleActionClick} />
@@ -624,15 +688,7 @@ function App() {
           </Layout>
           <div className="fixed bottom-0 left-0 right-0 bg-[#009a3e] p-2 z-40 md:hidden flex overflow-x-auto gap-2 justify-around shadow-[0_-2px_10px_rgba(0,0,0,0.1)]">
             {currentTabs.map((tab) => (
-              <button key={tab} onClick={() => { 
-                  setActiveTab(tab); 
-                  if(tab === 'History' || tab === 'Antimicrobials') {
-                    setHistoryStatusFilter(user?.role === UserRole.PHARMACIST ? 'All' : 'Approved');
-                    setHistoryAntimicrobialFilter('All');
-                    setHistorySearchQuery('');
-                    setDrugTypeFilter('All');
-                  }
-              }} className={`whitespace-nowrap px-2 py-1.5 font-medium text-xs transition-all duration-200 rounded-lg flex flex-col items-center flex-1 ${activeTab === tab ? 'bg-white text-[#009a3e] shadow-md' : 'text-white/80 hover:bg-white/20 hover:text-white'}`}><span className="mb-0.5"><TabIcon tabName={tab} /></span>{tab}</button>
+              <button key={tab} onClick={() => handleTabSelection(tab)} className={`whitespace-nowrap px-2 py-1.5 font-medium text-xs transition-all duration-200 rounded-lg flex flex-col items-center flex-1 ${activeTab === tab ? 'bg-white text-[#009a3e] shadow-md' : 'text-white/80 hover:bg-white/20 hover:text-white'}`}><span className="mb-0.5"><TabIcon tabName={tab} /></span>{tab}</button>
             ))}
           </div>
         </>
