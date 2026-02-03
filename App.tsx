@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import Login from './components/Login';
 import Layout from './components/Layout';
@@ -21,6 +20,7 @@ import {
   fetchPrescriptions, 
   updatePrescriptionStatus, 
   createPrescription,
+  deletePrescription,
   fetchAudits 
 } from './services/dataService';
 import { db } from './services/firebaseClient';
@@ -104,7 +104,8 @@ function App() {
     const qRequests = query(collection(db, 'requests'), orderBy('req_date', 'desc'));
     const unsubscribeRequests = onSnapshot(qRequests, (snapshot) => {
       const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Prescription[];
-      setData(items.filter(item => item.status !== PrescriptionStatus.DELETED));
+      // Keep everything in state, handle visibility at filtering level
+      setData(items);
     }, (err) => {
       setDbError(err.message);
     });
@@ -134,20 +135,6 @@ function App() {
       unsubscribeMonitoring();
     };
   }, [user]);
-
-  const loadData = async () => {
-    // With onSnapshot, loadData is mainly for initial state or manual triggers
-    setLoading(true);
-    const { data: result, error } = await fetchPrescriptions();
-    if (error) setDbError(error);
-    else setData(result.filter(item => item.status !== PrescriptionStatus.DELETED));
-    setLoading(false);
-  };
-
-  const loadAudits = async () => {
-    const { data: result, error } = await fetchAudits();
-    if (!error) setAuditData(result);
-  };
 
   const handleLogin = (loggedInUser: User) => {
     setUser(loggedInUser);
@@ -277,8 +264,8 @@ function App() {
           updates.dispensed_date = new Date().toISOString();
           break;
         case ActionType.DELETE:
-          statusToUpdate = PrescriptionStatus.DELETED;
-          break;
+          await deletePrescription(id);
+          return; // Early return as deletePrescription handles its own logic
         case ActionType.RESEND:
           statusToUpdate = PrescriptionStatus.PENDING;
           updates.ids_approved_at = null; updates.ids_disapproved_at = null;
@@ -317,6 +304,12 @@ function App() {
 
   const getFilteredDataForCurrentView = () => {
     let items = data;
+
+    // Standard behavior: Exclude deleted from regular views
+    if (user?.role !== UserRole.AMS_ADMIN || activeTab !== 'Antimicrobials') {
+       items = items.filter(i => i.status !== PrescriptionStatus.DELETED);
+    }
+
     if (user?.role === UserRole.RESIDENT || activeTab !== 'Pending') {
       items = items.filter(item => {
         const itemDate = item.req_date ? new Date(item.req_date) : new Date(item.created_at || Date.now());
@@ -335,6 +328,10 @@ function App() {
         else if (historyStatusFilter === 'For IDS Approval') items = items.filter(i => statusMatches(i.status, PrescriptionStatus.FOR_IDS_APPROVAL));
         else if (historyStatusFilter === 'Approved by ID') items = items.filter(i => statusMatches(i.status, PrescriptionStatus.APPROVED) && i.drug_type === DrugType.RESTRICTED);
         else items = [];
+
+        // Apply History Drug Type Filter for Pharmacist
+        if (drugTypeFilter === 'Monitored') items = items.filter(i => i.drug_type === DrugType.MONITORED);
+        else if (drugTypeFilter === 'Restricted') items = items.filter(i => i.drug_type === DrugType.RESTRICTED);
       } else if (user?.role === UserRole.IDS) {
         items = items.filter(i => i.id_specialist === user.name);
         if (historyStatusFilter === 'Approved') items = items.filter(i => statusMatches(i.status, PrescriptionStatus.APPROVED) && i.drug_type === DrugType.RESTRICTED);
@@ -376,8 +373,10 @@ function App() {
     
     if (user?.role === UserRole.AMS_ADMIN) {
       switch (activeTab) {
-        case 'Data Analysis': return data; 
-        case 'Antimicrobials': return items;
+        case 'Data Analysis': return data.filter(i => i.status !== PrescriptionStatus.DELETED); 
+        case 'Antimicrobials': 
+          // Default: show everything except deleted unless user changes status filter (handled in renderContent)
+          return items;
         case 'AMS Audit': return []; 
       }
     }
@@ -396,7 +395,8 @@ function App() {
 
     if (!showFilters) return null;
 
-    const uniqueAntimicrobials = Array.from(new Set(data.map(i => i.antimicrobial))).sort();
+    const activeData = data.filter(i => i.status !== PrescriptionStatus.DELETED);
+    const uniqueAntimicrobials = Array.from(new Set(activeData.map(i => i.antimicrobial))).sort();
 
     return (
       <div className="flex flex-col gap-4 mb-6 bg-white p-4 rounded-xl shadow-md border border-gray-200">
@@ -407,28 +407,44 @@ function App() {
                 Filters
                 </h3>
                 {activeTab === 'History' && (
-                    <div className="flex items-center gap-2 border-l pl-4 border-gray-200">
-                        <label className="text-xs font-semibold text-gray-500 uppercase">Status:</label>
-                        <select
-                            value={historyStatusFilter}
-                            onChange={(e) => setHistoryStatusFilter(e.target.value)}
-                            className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none [color-scheme:light]"
-                        >
-                            {user?.role === UserRole.PHARMACIST ? (
-                              <>
-                                <option value="All">All Actions</option>
-                                <option value="Approved">Approved (Monitored)</option>
-                                <option value="Disapproved">Disapproved</option>
-                                <option value="For IDS Approval">For IDS Approval</option>
-                                <option value="Approved by ID">Approved by ID</option>
-                              </>
-                            ) : (
-                              <>
-                                <option value="Approved">Approved</option>
-                                <option value="Disapproved">Disapproved</option>
-                              </>
-                            )}
-                        </select>
+                    <div className="flex items-center gap-4 border-l pl-4 border-gray-200">
+                        <div className="flex items-center gap-2">
+                            <label className="text-xs font-semibold text-gray-500 uppercase">Status:</label>
+                            <select
+                                value={historyStatusFilter}
+                                onChange={(e) => setHistoryStatusFilter(e.target.value)}
+                                className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none [color-scheme:light]"
+                            >
+                                {user?.role === UserRole.PHARMACIST ? (
+                                  <>
+                                    <option value="All">All Actions</option>
+                                    <option value="Approved">Approved (Monitored)</option>
+                                    <option value="Disapproved">Disapproved</option>
+                                    <option value="For IDS Approval">For IDS Approval</option>
+                                    <option value="Approved by ID">Approved by ID</option>
+                                  </>
+                                ) : (
+                                  <>
+                                    <option value="Approved">Approved</option>
+                                    <option value="Disapproved">Disapproved</option>
+                                  </>
+                                )}
+                            </select>
+                        </div>
+                        {user?.role === UserRole.PHARMACIST && (
+                            <div className="flex items-center gap-2 border-l pl-4 border-gray-100">
+                                <label className="text-xs font-semibold text-gray-500 uppercase">Drug Type:</label>
+                                <select 
+                                    value={drugTypeFilter} 
+                                    onChange={(e) => setDrugTypeFilter(e.target.value)} 
+                                    className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none [color-scheme:light]"
+                                >
+                                    <option value="All">All Types</option>
+                                    <option value="Monitored">Monitored</option>
+                                    <option value="Restricted">Restricted</option>
+                                </select>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -528,23 +544,49 @@ function App() {
         if (historyStatusFilter === 'For IDS Approval') tableStatusType = PrescriptionStatus.FOR_IDS_APPROVAL;
         return <PrescriptionTable items={viewData} onAction={handleActionClick} onView={handleViewDetails} statusType={tableStatusType} isHistoryView={true} />;
       case 'Data Analysis':
-        return <StatsChart data={data} allData={data} auditData={auditData} monitoringData={monitoringData} role={user?.role} selectedMonth={selectedMonth} onMonthChange={setSelectedMonth} selectedYear={selectedYear} onYearChange={setSelectedYear} />;
+        // Crucial: Exclude deleted data from analysis
+        const activeData = data.filter(i => i.status !== PrescriptionStatus.DELETED);
+        return <StatsChart data={activeData} allData={activeData} auditData={auditData} monitoringData={monitoringData} role={user?.role} selectedMonth={selectedMonth} onMonthChange={setSelectedMonth} selectedYear={selectedYear} onYearChange={setSelectedYear} />;
       case 'Antimicrobials':
-         let displayData = viewData;
-         if (drugTypeFilter === 'Monitored') displayData = viewData.filter(i => i.drug_type === DrugType.MONITORED);
-         else if (drugTypeFilter === 'Restricted') displayData = viewData.filter(i => i.drug_type === DrugType.RESTRICTED);
+         let amsItems = viewData;
+         // For AMS Admin, viewData already handles keeping deleted records if necessary.
+         // Let's refine based on the drugTypeFilter AND status filter
+         if (drugTypeFilter === 'Monitored') amsItems = amsItems.filter(i => i.drug_type === DrugType.MONITORED);
+         else if (drugTypeFilter === 'Restricted') amsItems = amsItems.filter(i => i.drug_type === DrugType.RESTRICTED);
+         
+         // In AMS view, the "History Status Filter" behaves as a bucket selector
+         if (historyStatusFilter === 'Deleted') {
+            amsItems = amsItems.filter(i => i.status === PrescriptionStatus.DELETED);
+         } else if (historyStatusFilter === 'All') {
+             // Do nothing, show everything (Active + Deleted)
+         } else {
+            amsItems = amsItems.filter(i => i.status !== PrescriptionStatus.DELETED);
+         }
+
          return (
            <div className="space-y-4">
-             <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-               <h3 className="text-lg font-bold text-gray-700">{activeTab} Requests</h3>
-               <div className="flex items-center gap-3">
+             <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+               <h3 className="text-lg font-bold text-gray-700">Antimicrobial Requests</h3>
+               <div className="flex flex-wrap items-center gap-4">
+                   <div className="flex items-center gap-2">
+                       <span className="text-xs font-semibold text-gray-500 uppercase">View:</span>
+                       <select 
+                        value={historyStatusFilter} 
+                        onChange={(e) => setHistoryStatusFilter(e.target.value)} 
+                        className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none [color-scheme:light]"
+                       >
+                            <option value="Active">All Active</option>
+                            <option value="Deleted">Show Deleted Only</option>
+                            <option value="All">All Requests (Incl. Deleted)</option>
+                       </select>
+                   </div>
                    <div className="flex items-center gap-2">
                        <span className="text-xs font-semibold text-gray-500 uppercase">Drug Type:</span>
-                       <select value={drugTypeFilter} onChange={(e) => setDrugTypeFilter(e.target.value)} className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none [color-scheme:light]"><option value="All">All</option><option value="Monitored">Monitored</option><option value="Restricted">Restricted</option></select>
+                       <select value={drugTypeFilter} onChange={(e) => setDrugTypeFilter(e.target.value)} className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none [color-scheme:light]"><option value="All">All Types</option><option value="Monitored">Monitored</option><option value="Restricted">Restricted</option></select>
                    </div>
                </div>
              </div>
-             <PrescriptionTable items={displayData} onAction={handleActionClick} onView={handleViewDetails} statusType={'ALL_VIEW'} />
+             <PrescriptionTable items={amsItems} onAction={handleActionClick} onView={handleViewDetails} statusType={'ALL_VIEW'} />
            </div>
          );
       default: return null;
@@ -559,7 +601,8 @@ function App() {
       <WorkflowModal isOpen={isWorkflowModalOpen} onClose={() => setIsWorkflowModalOpen(false)} />
       <AntimicrobialRequestForm isOpen={isAntimicrobialRequestFormOpen} onClose={() => { setIsAntimicrobialRequestFormOpen(false); setRequestToEdit(null); }} onSubmit={handleFormSubmission} loading={isSubmitting} initialData={requestToEdit} />
       <AMSAuditForm isOpen={isAMSAuditFormOpen} initialData={selectedAuditToEdit} onClose={() => { setIsAMSAuditFormOpen(false); setSelectedAuditToEdit(null); }} />
-      <AMSAuditDetailModal isOpen={!!selectedAuditForView} onClose={() => setSelectedAuditForView(null)} audit={selectedAuditForView} onSave={loadAudits} />
+      {/* Fix: Removed non-existent loadAudits function. Data updates are handled automatically by the onSnapshot real-time listener. */}
+      <AMSAuditDetailModal isOpen={!!selectedAuditForView} onClose={() => setSelectedAuditForView(null)} audit={selectedAuditForView} />
 
       {!user ? (
         <Login onLogin={handleLogin} onOpenManual={() => setIsUserManualOpen(false)} onOpenWorkflow={() => setIsWorkflowModalOpen(true)} onOpenAntimicrobialRequestForm={() => { setRequestToEdit(null); setIsAntimicrobialRequestFormOpen(true); }} onOpenAuditForm={() => { setSelectedAuditToEdit(null); setIsAMSAuditFormOpen(true); }} />
@@ -567,10 +610,11 @@ function App() {
         <>
           <Layout user={user} onLogout={handleLogout} tabs={currentTabs} activeTab={activeTab} onTabChange={(tab) => { 
               setActiveTab(tab); 
-              if(tab === 'History') {
+              if(tab === 'History' || tab === 'Antimicrobials') {
                 setHistoryStatusFilter(user?.role === UserRole.PHARMACIST ? 'All' : 'Approved');
                 setHistoryAntimicrobialFilter('All');
                 setHistorySearchQuery('');
+                setDrugTypeFilter('All'); // Reset drug type filter when switching tabs
               }
           }}>
             <PasswordModal isOpen={isPasswordModalOpen} onClose={() => setIsPasswordModalOpen(false)} onConfirm={handleConfirmPassword} expectedPassword={getCurrentUserPassword(user)} />
@@ -582,10 +626,11 @@ function App() {
             {currentTabs.map((tab) => (
               <button key={tab} onClick={() => { 
                   setActiveTab(tab); 
-                  if(tab === 'History') {
+                  if(tab === 'History' || tab === 'Antimicrobials') {
                     setHistoryStatusFilter(user?.role === UserRole.PHARMACIST ? 'All' : 'Approved');
                     setHistoryAntimicrobialFilter('All');
                     setHistorySearchQuery('');
+                    setDrugTypeFilter('All');
                   }
               }} className={`whitespace-nowrap px-2 py-1.5 font-medium text-xs transition-all duration-200 rounded-lg flex flex-col items-center flex-1 ${activeTab === tab ? 'bg-white text-[#009a3e] shadow-md' : 'text-white/80 hover:bg-white/20 hover:text-white'}`}><span className="mb-0.5"><TabIcon tabName={tab} /></span>{tab}</button>
             ))}

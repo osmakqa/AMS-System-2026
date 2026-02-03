@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
@@ -346,6 +345,16 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
     }, {} as Record<string, number[]>)).map(([name, times]) => ({ name, value: (times.reduce((a,b)=>a+b,0)/times.length)/(1000*60*60) }));
 
 
+    // Monthly Trend Calculation
+    const monthlyTrend = Array.from({ length: 12 }, (_, monthIdx) => {
+        const monthName = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][monthIdx];
+        const count = data.filter(item => {
+            const d = item.req_date ? new Date(item.req_date) : new Date(item.created_at || Date.now());
+            return d.getFullYear() === selectedYear && d.getMonth() === monthIdx && item.status !== PrescriptionStatus.DELETED;
+        }).length;
+        return { name: monthName, value: count };
+    });
+
     return {
       general: {
         totalRequests: source.length, approvalRate,
@@ -353,6 +362,7 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
         pediaCount: source.filter(p => p.mode === 'pediatric').length,
         approvedTypeData: [{ name: DrugType.MONITORED, value: approvedItems.filter(i => i.drug_type === DrugType.MONITORED).length },{ name: DrugType.RESTRICTED, value: approvedItems.filter(i => i.drug_type === DrugType.RESTRICTED).length }],
         topAntimicrobials: getTopN(source.map(i => i.antimicrobial), 5),
+        monthlyTrend
       },
       restricted: {
         total: restrictedData.length,
@@ -383,7 +393,7 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
         avgTimePerConsultant: avgTimePerIds
       }
     };
-  }, [modeFilteredData]);
+  }, [modeFilteredData, data, selectedYear]);
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
@@ -589,6 +599,21 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
       default: // General
         const g = processedData.general;
         return <div className="space-y-6">
+            {/* Monthly Comparison Chart for "All Months" */}
+            {selectedMonth === -1 && (
+                <ChartWrapper title={`Monthly Request Trend (${selectedYear})`}>
+                    <ResponsiveContainer>
+                        <BarChart data={g.monthlyTrend} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="name" />
+                            <YAxis />
+                            <Tooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
+                            <Bar dataKey="value" name="Requests" fill="#009a3e" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </ChartWrapper>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <KpiCard title="Total Requests" value={g.totalRequests} color="bg-gray-100 text-gray-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests'})} />
               <KpiCard title="Overall Approval Rate" value={g.approvalRate} color="bg-gray-100 text-gray-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d=>d.status === 'approved' || d.status === 'disapproved'), title: 'All Finalized Requests'})} />

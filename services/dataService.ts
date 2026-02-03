@@ -54,7 +54,8 @@ const sendToGoogleSheet = async (sheetName: string, data: any) => {
 
 export const fetchPrescriptions = async (): Promise<{ data: Prescription[], error: string | null }> => {
   try {
-    const q = query(collection(db, 'requests'), orderBy('req_date', 'desc'));
+    // Fetch all, we will handle filtering in the UI state
+    const q = query(collection(db, 'requests'), orderBy('request_number', 'desc'));
     const querySnapshot = await getDocs(q);
     const prescriptions = querySnapshot.docs.map(doc => ({
       ...doc.data(),
@@ -90,9 +91,17 @@ export const updatePrescriptionStatus = async (
   }
 };
 
+/**
+ * Performs a soft delete. Discards the request number.
+ */
 export const deletePrescription = async (id: string) => {
   try {
-    await deleteDoc(doc(db, 'requests', id));
+    const docRef = doc(db, 'requests', id);
+    await updateDoc(docRef, {
+      status: PrescriptionStatus.DELETED,
+      request_number: null, // Discard the sequence number
+      deleted_at: new Date().toISOString()
+    });
     sendToGoogleSheet("Prescriptions_Deleted", { id: id, timestamp: new Date().toISOString() });
   } catch (err: any) {
     console.error('Delete error:', err);
@@ -102,15 +111,20 @@ export const deletePrescription = async (id: string) => {
 
 export const createPrescription = async (prescription: Partial<Prescription>) => {
   try {
-    // Determine the next request number
-    const q = query(collection(db, 'requests'), orderBy('request_number', 'desc'), limit(1));
+    // Generate a reliable sequential request number starting from 1
+    // Filter out records where request_number is null (deleted ones)
+    const q = query(
+      collection(db, 'requests'), 
+      where('request_number', '>', 0), 
+      orderBy('request_number', 'desc'), 
+      limit(1)
+    );
     const snapshot = await getDocs(q);
+    
     let nextNum = 1;
     if (!snapshot.empty) {
         const lastEntry = snapshot.docs[0].data() as Prescription;
-        if (lastEntry.request_number) {
-            nextNum = lastEntry.request_number + 1;
-        }
+        nextNum = (Number(lastEntry.request_number) || 0) + 1;
     }
 
     const docRef = await addDoc(collection(db, 'requests'), {
@@ -123,6 +137,7 @@ export const createPrescription = async (prescription: Partial<Prescription>) =>
     if (newDoc.exists()) {
       sendToGoogleSheet("Prescriptions", { ...newDoc.data(), id: docRef.id });
     }
+    return docRef.id;
   } catch (err: any) {
     console.error('Create error:', err);
     throw err;

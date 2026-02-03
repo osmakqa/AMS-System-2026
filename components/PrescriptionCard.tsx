@@ -29,7 +29,7 @@ const PrescriptionCard: React.FC<PrescriptionCardProps> = ({ item, onAction, onV
     >
       <div className="flex justify-between items-start mb-3">
         <div className="flex items-center gap-2">
-            <span className="text-xs font-black text-gray-400 uppercase tracking-widest">#{item.request_number}</span>
+            <span className="text-xs font-black text-gray-400 uppercase tracking-widest">#{item.request_number || 'DEL'}</span>
             <span className={`text-xs font-bold uppercase tracking-wider ${isRestricted ? 'text-red-600' : 'text-blue-600'}`}>{item.drug_type}</span>
         </div>
         <span className="text-xs font-medium text-gray-500">{item.req_date ? new Date(item.req_date).toLocaleDateString() : 'No Date'}</span>
@@ -62,7 +62,7 @@ const PrescriptionCard: React.FC<PrescriptionCardProps> = ({ item, onAction, onV
                 <button onClick={() => onAction(item.id, ActionType.DISAPPROVE)} className={`flex-1 ${btnBase} bg-white text-red-600 border border-red-200 hover:bg-red-50`}><XIcon/> Disapprove</button>
               </>
             )}
-             <button onClick={() => onAction(item.id, ActionType.DELETE)} className={`${btnBase} bg-gray-200 text-gray-700 hover:bg-gray-300 w-10 h-10 p-0`} title="Delete"><TrashIcon/></button>
+            {/* Delete button removed for Pharmacist per request */}
           </>
         )}
 
@@ -81,6 +81,8 @@ const PrescriptionCard: React.FC<PrescriptionCardProps> = ({ item, onAction, onV
                 <button onClick={() => onAction(item.id, ActionType.RESEND)} className={`flex-1 ${btnBase} bg-green-600 text-white hover:bg-green-700`}>
                     <RefreshIcon/> Resend
                 </button>
+                {/* Added Delete button for Resident per request */}
+                <button onClick={() => onAction(item.id, ActionType.DELETE)} className={`${btnBase} bg-gray-200 text-gray-700 hover:bg-red-100 hover:text-red-700 w-10 h-10 p-0`} title="Delete Request"><TrashIcon/></button>
             </>
         )}
       </div>

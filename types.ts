@@ -85,6 +85,8 @@ export interface Prescription {
   mode?: 'adult' | 'pediatric';
 
   diagnosis?: string;
+  system_site?: string;
+  system_site_other?: string;
   sgpt?: string;
   scr_mgdl?: string;
   egfr_text?: string;

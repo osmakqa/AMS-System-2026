@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Prescription, UserRole, PrescriptionStatus, DrugType, ActionType, RequestFinding, PreviousAntibiotic, Organism } from '../types';
 import { IDS_SPECIALISTS } from '../constants'; 
@@ -290,6 +291,12 @@ const DetailModal: React.FC<DetailModalProps> = ({ isOpen, onClose, item, role, 
     );
   };
 
+  const getFullSystemSite = () => {
+      if (!item.system_site) return '-';
+      if (item.system_site === 'OTHERS (SPECIFY)') return item.system_site_other || 'Others';
+      return item.system_site;
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[100] p-0 md:p-4 animate-fade-in backdrop-blur-sm" onClick={onClose}>
       <div className={`bg-white rounded-none md:rounded-xl shadow-2xl w-full h-full md:h-[90vh] flex flex-col border border-gray-200 overflow-hidden ${isReviewer ? 'max-w-full md:max-w-[95vw]' : 'max-w-full md:max-w-4xl'}`} onClick={(e) => e.stopPropagation()}>
@@ -300,7 +307,7 @@ const DetailModal: React.FC<DetailModalProps> = ({ isOpen, onClose, item, role, 
             <div className="flex items-center gap-2 md:gap-3 flex-wrap">
                 <h2 className="text-lg md:text-2xl font-bold truncate">{item.patient_name}</h2>
                 <div className="flex gap-1.5 shrink-0">
-                  <span className="px-2 md:px-3 py-0.5 rounded-full text-[9px] md:text-[10px] font-black bg-white/20 border border-white/30 backdrop-blur-md uppercase tracking-widest">#{item.request_number}</span>
+                  <span className="px-2 md:px-3 py-0.5 rounded-full text-[9px] md:text-[10px] font-black bg-white/20 border border-white/30 backdrop-blur-md uppercase tracking-widest">#{item.request_number || 'N/A'}</span>
                   <span className="px-2 md:px-3 py-0.5 rounded-full text-[10px] md:text-xs font-bold bg-white/20 border border-white/30 backdrop-blur-md">{formatStatus(item.status)}</span>
                 </div>
             </div>
@@ -379,6 +386,7 @@ const DetailModal: React.FC<DetailModalProps> = ({ isOpen, onClose, item, role, 
                     <SelectableSection id="Clinical Data" title="Clinical Data" className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
                         <div className="grid grid-cols-2 gap-y-4 gap-x-2">
                             <InfoItem label="Diagnosis" value={item.diagnosis} fullWidth />
+                            <InfoItem label="System / Site" value={getFullSystemSite()} fullWidth />
                             <InfoItem label="SGPT" value={item.sgpt} />
                             <InfoItem label="SCr" value={item.scr_mgdl} />
                             <InfoItem label="eGFR" value={item.egfr_text} fullWidth />
@@ -432,6 +440,31 @@ const DetailModal: React.FC<DetailModalProps> = ({ isOpen, onClose, item, role, 
                         </div>
                     </SelectableSection>
                 </div>
+
+                {/* Resident Findings Section - Always show if findings exist and user is not currently reviewing */}
+                {(!isReviewer && item.findings && item.findings.length > 0) && (
+                  <div className="mt-8 pt-6 border-t border-gray-200">
+                    <h3 className="text-sm font-bold text-indigo-800 uppercase tracking-widest flex items-center gap-2 mb-4">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-indigo-500" viewBox="0 0 20 20" fill="currentColor"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" /><path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" /></svg>
+                      Reviewer Findings & Interventions
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {item.findings.map((f, idx) => (
+                        <div key={idx} className="bg-indigo-50 border-l-4 border-indigo-500 p-4 rounded-lg shadow-sm">
+                          <div className="flex justify-between items-start mb-2">
+                            <span className="text-[10px] font-black text-indigo-700 uppercase bg-indigo-100 px-2 py-0.5 rounded">{f.section}</span>
+                            <span className="text-[9px] text-indigo-400 font-bold uppercase">{new Date(f.timestamp).toLocaleDateString()}</span>
+                          </div>
+                          <p className="text-sm font-black text-indigo-900 mb-1">{f.category}</p>
+                          <p className="text-xs text-indigo-800 leading-relaxed italic">{f.details}</p>
+                          <div className="mt-3 text-[10px] text-indigo-400 font-bold uppercase text-right border-t border-indigo-100 pt-2">
+                            Logged by: {f.user}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
             </div>
 
             {/* Right Pane: Findings (Reviewer Workspace) */}

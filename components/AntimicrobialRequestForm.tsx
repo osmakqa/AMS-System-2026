@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { DrugType, PrescriptionStatus, PreviousAntibiotic, Organism, Susceptibility } from '../types';
 import { IDS_SPECIALISTS_ADULT, IDS_SPECIALISTS_PEDIATRIC, WARDS, LOGO_URL } from '../constants';
@@ -24,6 +25,43 @@ const CLINICAL_DEPARTMENTS = [
   "Ophthalmology",
   "Physical and Rehabilitation Medicine"
 ];
+
+const SYSTEM_SITE_OPTIONS = [
+  "CNS",
+  "EYE",
+  "ENT",
+  "RESP",
+  "CVS",
+  "GI",
+  "SKIN & SOFT TISSUE",
+  "BONE/JOINTS",
+  "UTI",
+  "GENITO-URINARY",
+  "OBSTETRICS/GYNECOLOGY",
+  "SEPSIS",
+  "MALARIA",
+  "HIV",
+  "FEVER OF UNKNOWN ORIGIN",
+  "FEVER IN NEUTROPENIC PATIENT",
+  "LYMPHATICS",
+  "DISSEMINATED INFECTION",
+  "OTHERS (SPECIFY)"
+];
+
+const INDICATION_TYPE_INFO: Record<string, { definition: string, example: string }> = {
+  'Empiric': {
+    definition: 'Treatment initiated based on clinical suspicion before a specific pathogen is identified.',
+    example: 'Broad-spectrum coverage for suspected sepsis or pneumonia awaiting cultures.'
+  },
+  'Prophylactic': {
+    definition: 'Use of antimicrobials to prevent infection in high-risk procedures or clinical conditions.',
+    example: 'Pre-operative antibiotic given before incision or long-term prophylaxis for splenectomy.'
+  },
+  'Therapeutic': {
+    definition: 'Targeted treatment once the specific pathogen and its drug sensitivities are known.',
+    example: 'Switching to narrow-spectrum therapy based on positive blood culture results.'
+  }
+};
 
 const BASIS_OPTIONS = [
   { 
@@ -181,7 +219,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     req_date: getTodayDate(),
     patient_name: '', hospital_number: '', patient_dob: '', age: '', sex: '', weight_kg: '', height_cm: '', ward: '',
     mode: 'adult' as 'adult' | 'pediatric',
-    diagnosis: '', sgpt: '', scr_mgdl: '', egfr_text: '',
+    diagnosis: '', system_site: '', system_site_other: '', sgpt: '', scr_mgdl: '', egfr_text: '',
     antimicrobial: '', drug_type: DrugType.MONITORED as DrugType, dose: '', frequency: '', duration: '',
     route: 'IV',
     route_other: '',
@@ -245,7 +283,9 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
         route: initialData.route || 'IV',
         route_other: initialData.route_other || '',
         selectedBasisCategory: category,
-        basis_indication_details: details
+        basis_indication_details: details,
+        system_site: initialData.system_site || '',
+        system_site_other: initialData.system_site_other || ''
       });
 
       if (initialData.scr_mgdl === "Pending") setScrNotAvailable(true);
@@ -474,7 +514,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
   const validateForm = () => {
     const errors: Record<string, string> = {};
     const requiredFields: (keyof typeof formData)[] = [
-      'patient_name', 'age', 'sex', 'weight_kg', 'hospital_number', 'ward', 'diagnosis',
+      'patient_name', 'age', 'sex', 'weight_kg', 'hospital_number', 'ward', 'diagnosis', 'system_site',
       'antimicrobial', 'dose', 'frequency', 'duration', 'route', 'selectedIndicationType',
       'resident_name', 'clinical_dept', 'req_date', 'selectedBasisCategory'
     ];
@@ -487,6 +527,10 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
 
     if (formData.selectedBasisCategory === 'Others (Specify)' && !formData.basis_indication_details.trim()) {
       errors.basis_indication_details = 'Please specify the clinical justification.';
+    }
+
+    if (formData.system_site === 'OTHERS (SPECIFY)' && !formData.system_site_other.trim()) {
+      errors.system_site_other = 'Please specify the System/Site.';
     }
 
     // CLINICAL VALIDATION: Adult Age Check
@@ -602,52 +646,6 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     setValidationErrors({});
   };
 
-  const handleSampleFill = () => {
-    setPatientMode('adult');
-    setFormData({
-      req_date: getTodayDate(),
-      patient_name: 'Dela Cruz, Juan',
-      hospital_number: '1234567',
-      patient_dob: '',
-      age: '45',
-      sex: 'Male',
-      weight_kg: '70',
-      height_cm: '170',
-      ward: 'Medicine Male',
-      mode: 'adult',
-      diagnosis: 'Community-Acquired Pneumonia, Severe',
-      sgpt: '35',
-      scr_mgdl: '110',
-      egfr_text: '',
-      antimicrobial: 'Meropenem',
-      drug_type: DrugType.RESTRICTED,
-      dose: '1g',
-      frequency: 'q8h',
-      duration: '7',
-      route: 'IV',
-      route_other: '',
-      indication: 'Therapeutic',
-      basis_indication: '',
-      selectedBasisCategory: 'Community-Acquired Infection',
-      basis_indication_details: 'Fever, cough, rales on physical exam, new infiltrate on CXR',
-      selectedIndicationType: 'Therapeutic',
-      specimen: 'Sputum',
-      resident_name: 'Dr. Sample Resident',
-      clinical_dept: 'Internal Medicine',
-      service_resident_name: 'Dr. Service IM',
-      id_specialist: 'Dr. Christopher John Tibayan',
-    });
-    setPrevAbxRows([{ id: 999, drug: 'Ceftriaxone', frequency: '2g OD', duration: '3 days' }]);
-    setOrganismBlocks([{ 
-      id: 999, 
-      name: 'K. pneumoniae', 
-      susceptibilities: [{ drug: 'Meropenem', result: 'S' }] 
-    }]);
-    setScrNotAvailable(false);
-    setValidationErrors({});
-    setIsCustomWard(false);
-  };
-
   const addPrevAbxRow = () => {
     setPrevAbxRows(prev => [...prev, { id: nextPrevAbxId.current++, drug: '', frequency: '', duration: '' }]);
   };
@@ -691,6 +689,10 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     return opt ? opt.definition : '';
   }, [formData.selectedBasisCategory]);
 
+  const selectedIndicationInfo = useMemo(() => {
+    return INDICATION_TYPE_INFO[formData.selectedIndicationType] || null;
+  }, [formData.selectedIndicationType]);
+
   if (!isOpen) return null;
 
   return (
@@ -706,14 +708,6 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button 
-              type="button" 
-              onClick={handleSampleFill} 
-              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold border border-white/20 transition-all flex items-center gap-1.5"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
-              Sample Fill
-            </button>
             <button onClick={onClose} className="text-white/80 hover:text-white hover:bg-white/20 rounded-full p-2 transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
@@ -763,13 +757,48 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                 <section className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
                     <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2">Clinical Data</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormGroup label="Diagnosis" error={validationErrors.diagnosis}><Input id="diagnosis" error={!!validationErrors.diagnosis} name="diagnosis" value={formData.diagnosis} onChange={handleChange} placeholder="Primary working diagnosis" /></FormGroup>
+                        <FormGroup label="Primary Diagnosis" error={validationErrors.diagnosis}><Input id="diagnosis" error={!!validationErrors.diagnosis} name="diagnosis" value={formData.diagnosis} onChange={handleChange} placeholder="Primary working diagnosis" /></FormGroup>
+                        <FormGroup label="System / Site" error={validationErrors.system_site}>
+                            <Select 
+                                id="system_site" 
+                                error={!!validationErrors.system_site} 
+                                name="system_site" 
+                                value={formData.system_site} 
+                                onChange={handleChange}
+                            >
+                                <option value="">Select System/Site...</option>
+                                {SYSTEM_SITE_OPTIONS.map(opt => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                            </Select>
+                            {formData.system_site === 'OTHERS (SPECIFY)' && (
+                                <Input 
+                                    id="system_site_other" 
+                                    error={!!validationErrors.system_site_other} 
+                                    name="system_site_other" 
+                                    value={formData.system_site_other} 
+                                    onChange={handleChange} 
+                                    placeholder="Specify site..." 
+                                    className="mt-2"
+                                />
+                            )}
+                        </FormGroup>
                         <FormGroup label="Indication Type" error={validationErrors.selectedIndicationType}>
                              <div id="selectedIndicationType" className={`flex gap-2 p-1 rounded-lg ${validationErrors.selectedIndicationType ? 'border border-red-500 bg-red-50' : ''}`}>
                                 {(['Empiric', 'Prophylactic', 'Therapeutic'] as const).map(ind => (
                                     <button key={ind} type="button" onClick={() => setFormData(p=>({...p, selectedIndicationType: ind}))} className={`flex-1 py-2 text-xs font-bold rounded-lg border transition-all ${formData.selectedIndicationType === ind ? 'bg-green-50 border-green-500 text-green-700 shadow-sm' : 'bg-white border-gray-200 text-gray-400 hover:border-gray-300'}`}>{ind}</button>
                                 ))}
                              </div>
+                             
+                             {selectedIndicationInfo && (
+                                <div className="mt-3 animate-fade-in">
+                                    <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded-r-lg shadow-sm">
+                                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">Classification Guide</p>
+                                        <p className="text-xs text-blue-800 font-medium leading-relaxed italic">{selectedIndicationInfo.definition}</p>
+                                        <p className="text-[10px] text-blue-600 font-bold mt-2 uppercase tracking-tighter">Example: <span className="font-normal normal-case italic text-blue-700">{selectedIndicationInfo.example}</span></p>
+                                    </div>
+                                </div>
+                             )}
                         </FormGroup>
                         
                         <FormGroup label="Basis for Indication" className="md:col-span-2" error={validationErrors.selectedBasisCategory}>
@@ -961,7 +990,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                                     {formData.selectedIndicationType} Indication
                                 </div>
                                 <div className="space-y-6">
-                                    <SummaryValue label="DIAGNOSIS" value={formData.diagnosis} />
+                                    <SummaryValue label="DIAGNOSIS" value={`${formData.diagnosis} (${formData.system_site === 'OTHERS (SPECIFY)' ? formData.system_site_other : formData.system_site})`} />
                                     <SummaryValue label="BASIS FOR INDICATION" value={`${formData.selectedBasisCategory}${formData.basis_indication_details ? ': ' + formData.basis_indication_details : ''}`} />
                                     <div className="grid grid-cols-3 gap-2 pt-4 border-t border-gray-50">
                                         <SummaryValue label="SCR" value={scrNotAvailable ? 'PENDING' : formData.scr_mgdl} />

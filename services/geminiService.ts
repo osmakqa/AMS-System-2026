@@ -1,7 +1,6 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Removed top-level ai instance to follow guidelines of creating it right before the call.
 
 interface RenalCheckResult {
   requiresAdjustment: boolean;
@@ -31,6 +30,9 @@ export const checkRenalDosing = async (
   }
 
   try {
+    // Fix: Create a new GoogleGenAI instance right before making an API call.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
     // 2. Define the response schema for structured JSON output
     const responseSchema = {
       type: Type.OBJECT,
@@ -72,8 +74,9 @@ export const checkRenalDosing = async (
     `;
 
     // 4. Call the model
+    // Fix: Upgraded to 'gemini-3-pro-preview' for advanced clinical reasoning tasks.
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -112,6 +115,9 @@ export const verifyPediatricDosing = async (
   if (!drugName || !weightKg || !dose || !monographText) return null;
 
   try {
+    // Fix: Create a new GoogleGenAI instance right before making an API call.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
     const responseSchema = {
       type: Type.OBJECT,
       properties: {
@@ -138,8 +144,9 @@ export const verifyPediatricDosing = async (
       - message: "Calculated [X] mg/kg/day. Safe range/limit is [Y]. [Verdict]."
     `;
 
+    // Fix: Upgraded to 'gemini-3-pro-preview' for advanced clinical reasoning tasks.
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -176,6 +183,9 @@ export const verifyWeightBasedDosing = async (
   if (!drugName || !weightKg || !dose || !monographText) return null;
 
   try {
+    // Fix: Create a new GoogleGenAI instance right before making an API call.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
     const responseSchema = {
       type: Type.OBJECT,
       properties: {
@@ -206,8 +216,9 @@ export const verifyWeightBasedDosing = async (
       - Be helpful and educational in the message.
     `;
 
+    // Fix: Upgraded to 'gemini-3-pro-preview' for advanced clinical reasoning tasks.
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
