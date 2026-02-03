@@ -14,20 +14,32 @@ interface DetailModalProps {
   onAction?: (id: string, action: ActionType, payload?: any) => void;
 }
 
+const formatDateTime = (isoString?: string) => {
+  if (!isoString) return '';
+  try {
+    const d = new Date(isoString);
+    return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  } catch (e) {
+    return '';
+  }
+};
+
 const LifecycleTracker: React.FC<{ item: Prescription }> = ({ item }) => {
+  const finalDecisionTime = item.ids_approved_at || item.ids_disapproved_at || item.dispensed_date;
+
   const stages = [
     {
       name: 'Request Created',
       isComplete: true,
       isInProgress: false,
-      info: `By ${item.resident_name || item.requested_by} on ${new Date(item.req_date).toLocaleDateString()}`
+      info: `By ${item.resident_name || item.requested_by} on ${formatDateTime(item.created_at || item.req_date)}`
     },
     {
       name: 'Pharmacist Action',
       isComplete: item.status !== PrescriptionStatus.PENDING,
       isInProgress: item.status === PrescriptionStatus.PENDING,
       info: item.dispensed_date 
-        ? `By ${item.dispensed_by || 'Pharmacist'} on ${new Date(item.dispensed_date).toLocaleDateString()}` 
+        ? `By ${item.dispensed_by || 'Pharmacist'} on ${formatDateTime(item.dispensed_date)}` 
         : (item.status === PrescriptionStatus.FOR_IDS_APPROVAL ? 'Forwarded to IDS' : 'Awaiting review...')
     },
     ...(item.drug_type === DrugType.RESTRICTED ? [{
@@ -35,16 +47,20 @@ const LifecycleTracker: React.FC<{ item: Prescription }> = ({ item }) => {
       isComplete: !!item.ids_approved_at || !!item.ids_disapproved_at,
       isInProgress: item.status === PrescriptionStatus.FOR_IDS_APPROVAL,
       info: item.ids_approved_at 
-        ? `Approved by ${item.id_specialist || 'IDS'} on ${new Date(item.ids_approved_at).toLocaleDateString()}` 
+        ? `Approved by ${item.id_specialist || 'IDS'} on ${formatDateTime(item.ids_approved_at)}` 
         : (item.ids_disapproved_at 
-            ? `Disapproved by ${item.id_specialist || 'IDS'} on ${new Date(item.ids_disapproved_at).toLocaleDateString()}`
+            ? `Disapproved by ${item.id_specialist || 'IDS'} on ${formatDateTime(item.ids_disapproved_at)}`
             : 'Awaiting Specialist...')
     }] : []),
     {
       name: 'Finalized',
       isComplete: item.status === PrescriptionStatus.APPROVED || item.status === PrescriptionStatus.DISAPPROVED,
       isInProgress: false,
-      info: item.status === PrescriptionStatus.APPROVED ? 'Approved' : (item.status === PrescriptionStatus.DISAPPROVED ? 'Disapproved' : 'In Progress')
+      info: item.status === PrescriptionStatus.APPROVED 
+        ? `Approved on ${formatDateTime(finalDecisionTime)}` 
+        : (item.status === PrescriptionStatus.DISAPPROVED 
+            ? `Disapproved on ${formatDateTime(finalDecisionTime)}` 
+            : 'In Progress')
     }
   ];
 
@@ -75,10 +91,10 @@ const LifecycleTracker: React.FC<{ item: Prescription }> = ({ item }) => {
       <div className="flex justify-between items-start overflow-x-auto pb-2">
         {stages.map((stage, index) => (
           <React.Fragment key={stage.name}>
-            <div className="flex flex-col items-center text-center min-w-[100px] max-w-[140px]">
+            <div className="flex flex-col items-center text-center min-w-[120px] max-w-[160px]">
               <Icon isComplete={stage.isComplete} isInProgress={stage.isInProgress} />
               <p className={`text-xs font-bold mt-2 ${stage.isComplete ? 'text-green-700' : 'text-gray-600'}`}>{stage.name}</p>
-              <p className="text-[10px] text-gray-500 leading-tight mt-1">{stage.info}</p>
+              <p className="text-[10px] text-gray-500 leading-tight mt-1 px-1">{stage.info}</p>
             </div>
             {index < stages.length - 1 && (
               <div className="flex-1 h-px bg-gray-300 mt-4 mx-2 min-w-[20px]"></div>

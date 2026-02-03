@@ -22,6 +22,15 @@ const PrescriptionCard: React.FC<PrescriptionCardProps> = ({ item, onAction, onV
   const cardBorderColor = isRestricted ? 'border-red-500' : 'border-blue-500';
   const btnBase = "flex items-center justify-center py-2.5 px-3 rounded-lg font-bold text-xs transition-all duration-200 ease-in-out shadow-md hover:shadow-lg hover:-translate-y-0.5";
   
+  const formatTime = (isoString?: string) => {
+    if (!isoString) return null;
+    try {
+      return new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch (e) {
+      return null;
+    }
+  };
+
   return (
     <div 
       className={`bg-white/70 backdrop-blur-md rounded-xl shadow-lg border border-white/30 border-l-4 ${cardBorderColor} p-5 relative transition-all duration-300 ease-in-out hover:shadow-2xl hover:-translate-y-1.5 cursor-pointer flex flex-col overflow-hidden`}
@@ -32,7 +41,14 @@ const PrescriptionCard: React.FC<PrescriptionCardProps> = ({ item, onAction, onV
             <span className="text-xs font-black text-gray-400 uppercase tracking-widest">#{item.request_number || 'DEL'}</span>
             <span className={`text-xs font-bold uppercase tracking-wider ${isRestricted ? 'text-red-600' : 'text-blue-600'}`}>{item.drug_type}</span>
         </div>
-        <span className="text-xs font-medium text-gray-500">{item.req_date ? new Date(item.req_date).toLocaleDateString() : 'No Date'}</span>
+        <div className="text-right">
+            <div className="text-xs font-medium text-gray-500">{item.req_date ? new Date(item.req_date).toLocaleDateString() : 'No Date'}</div>
+            {item.created_at && (
+                <div className="text-[10px] font-black text-gray-400 uppercase tracking-tight mt-0.5">
+                    {formatTime(item.created_at)}
+                </div>
+            )}
+        </div>
       </div>
 
       <h3 className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent truncate">{item.patient_name}</h3>
@@ -62,7 +78,6 @@ const PrescriptionCard: React.FC<PrescriptionCardProps> = ({ item, onAction, onV
                 <button onClick={() => onAction(item.id, ActionType.DISAPPROVE)} className={`flex-1 ${btnBase} bg-white text-red-600 border border-red-200 hover:bg-red-50`}><XIcon/> Disapprove</button>
               </>
             )}
-            {/* Delete button removed for Pharmacist per request */}
           </>
         )}
 
@@ -81,7 +96,6 @@ const PrescriptionCard: React.FC<PrescriptionCardProps> = ({ item, onAction, onV
                 <button onClick={() => onAction(item.id, ActionType.RESEND)} className={`flex-1 ${btnBase} bg-green-600 text-white hover:bg-green-700`}>
                     <RefreshIcon/> Resend
                 </button>
-                {/* Added Delete button for Resident per request */}
                 <button onClick={() => onAction(item.id, ActionType.DELETE)} className={`${btnBase} bg-gray-200 text-gray-700 hover:bg-red-100 hover:text-red-700 w-10 h-10 p-0`} title="Delete Request"><TrashIcon/></button>
             </>
         )}
