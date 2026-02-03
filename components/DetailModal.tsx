@@ -457,15 +457,15 @@ const DetailModal: React.FC<DetailModalProps> = ({ isOpen, onClose, item, role, 
                     </SelectableSection>
                 </div>
 
-                {/* Resident Findings Section - Always show if findings exist and user is not currently reviewing */}
-                {(!isReviewer && item.findings && item.findings.length > 0) && (
+                {/* Findings Section - Show if findings exist */}
+                {(findingsToDisplay.length > 0) && (
                   <div className="mt-8 pt-6 border-t border-gray-200">
                     <h3 className="text-sm font-bold text-indigo-800 uppercase tracking-widest flex items-center gap-2 mb-4">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-indigo-500" viewBox="0 0 20 20" fill="currentColor"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" /><path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" /></svg>
                       Reviewer Findings & Interventions
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {item.findings.map((f, idx) => (
+                      {findingsToDisplay.map((f, idx) => (
                         <div key={idx} className="bg-indigo-50 border-l-4 border-indigo-500 p-4 rounded-lg shadow-sm">
                           <div className="flex justify-between items-start mb-2">
                             <span className="text-[10px] font-black text-indigo-700 uppercase bg-indigo-100 px-2 py-0.5 rounded">{f.section}</span>
@@ -555,6 +555,9 @@ const DetailModal: React.FC<DetailModalProps> = ({ isOpen, onClose, item, role, 
                                         <p className="text-[10px] font-black text-red-800 uppercase mb-1 tracking-tight">{f.section}</p>
                                         <p className="text-sm font-bold text-gray-900">{f.category}</p>
                                         <p className="text-xs text-gray-600 mt-1 leading-relaxed">{f.details}</p>
+                                        <div className="mt-2 text-right">
+                                            <span className="text-[9px] text-red-700 font-bold uppercase">By: {f.user} • {new Date(f.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
