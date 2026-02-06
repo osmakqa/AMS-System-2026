@@ -407,6 +407,7 @@ const DetailModal: React.FC<DetailModalProps> = ({ isOpen, onClose, item, role, 
                             <InfoItem label="System / Site" value={getFullSystemSite()} fullWidth />
                             <InfoItem label="SGPT" value={item.sgpt} />
                             <InfoItem label="SCr" value={item.scr_mgdl} />
+                            {item.scr_date && <InfoItem label="SCr Date" value={new Date(item.scr_date).toLocaleDateString()} fullWidth />}
                             <InfoItem label="eGFR" value={item.egfr_text} fullWidth />
                         </div>
                     </SelectableSection>

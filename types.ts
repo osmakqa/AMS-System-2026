@@ -92,6 +92,7 @@ export interface Prescription {
   system_site_other?: string;
   sgpt?: string;
   scr_mgdl?: string;
+  scr_date?: string;
   egfr_text?: string;
 
   antimicrobial: string;

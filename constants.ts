@@ -31,9 +31,9 @@ export const PHARMACISTS = [
 ].sort();
 
 export const IDS_SPECIALISTS_ADULT = [
-  "Dr. Christopher John Tibayan",
+  "Dr. Christoper John Tibayan",
   "Dr. Jelly Ann Gozun-Recuenco",
-  "Dr. Paulo Garcia"
+  "Dr. Rico Paolo Garcia"
 ].sort();
 
 export const IDS_SPECIALISTS_PEDIATRIC = [

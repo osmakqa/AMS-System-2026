@@ -71,6 +71,22 @@ const TabIcon = ({ tabName }: { tabName: string }) => {
   );
 };
 
+// Helper to normalize and match IDS names, handling common spelling variations
+const isIdsNameMatch = (userName: string, recordName: string | undefined | null) => {
+    if (!recordName) return false;
+    const cleanUser = userName.toLowerCase().trim();
+    const cleanRecord = recordName.toLowerCase().trim();
+    if (cleanUser === cleanRecord) return true;
+
+    // Specific legacy mapping for Dr. Tibayan (Christopher vs Christoper)
+    const tibayanVariants = ["dr. christopher john tibayan", "dr. christoper john tibayan"];
+    if (tibayanVariants.includes(cleanUser) && tibayanVariants.includes(cleanRecord)) {
+        return true;
+    }
+
+    return false;
+};
+
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -394,7 +410,7 @@ function App() {
         if (drugTypeFilter === 'Monitored') items = items.filter(i => i.drug_type === DrugType.MONITORED);
         else if (drugTypeFilter === 'Restricted') items = items.filter(i => i.drug_type === DrugType.RESTRICTED);
       } else if (user?.role === UserRole.IDS) {
-        items = items.filter(i => i.id_specialist === user.name);
+        items = items.filter(i => isIdsNameMatch(user.name, i.id_specialist));
         if (historyStatusFilter === 'Approved') items = items.filter(i => statusMatches(i.status, PrescriptionStatus.APPROVED) && i.drug_type === DrugType.RESTRICTED);
         else if (historyStatusFilter === 'Disapproved') items = items.filter(i => statusMatches(i.status, PrescriptionStatus.DISAPPROVED) && i.drug_type === DrugType.RESTRICTED);
         else items = [];
@@ -426,7 +442,7 @@ function App() {
     if (user?.role === UserRole.IDS) {
       switch (activeTab) {
         case 'Pending': 
-          return items.filter(i => i.id_specialist === user.name && statusMatches(i.status, PrescriptionStatus.FOR_IDS_APPROVAL));
+          return items.filter(i => isIdsNameMatch(user.name, i.id_specialist) && statusMatches(i.status, PrescriptionStatus.FOR_IDS_APPROVAL));
       }
     }
     

@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
@@ -19,10 +20,40 @@ interface StatsChartProps {
   onYearChange: (year: number) => void;
 }
 
+// Helper to normalize and match IDS names, handling common spelling variations
+const isIdsNameMatch = (name1: string | undefined | null, name2: string | undefined | null) => {
+    if (!name1 || !name2) return false;
+    const clean1 = name1.toLowerCase().trim();
+    const clean2 = name2.toLowerCase().trim();
+    if (clean1 === clean2) return true;
+
+    // Specific legacy mapping for Dr. Tibayan (Christopher vs Christoper)
+    const tibayanVariants = ["dr. christopher john tibayan", "dr. christoper john tibayan"];
+    if (tibayanVariants.includes(clean1) && tibayanVariants.includes(clean2)) {
+        return true;
+    }
+
+    return false;
+};
+
+// Canonical name for Tibayan for stats aggregation
+const getCanonicalIdsName = (name: string | undefined | null) => {
+    if (!name) return name;
+    const clean = name.toLowerCase().trim();
+    const tibayanVariants = ["dr. christopher john tibayan", "dr. christoper john tibayan"];
+    if (tibayanVariants.includes(clean)) return "Dr. Christoper John Tibayan";
+    return name;
+};
+
 // --- Data Processing Helpers ---
-const getTopN = (items: (string | undefined)[], n: number) => {
+const getTopN = (items: (string | undefined)[], n: number, useCanonicalIds: boolean = false) => {
   const counts = new Map<string, number>();
-  items.forEach(item => { if (item) { counts.set(item, (counts.get(item) || 0) + 1); } });
+  items.forEach(item => { 
+      if (item) { 
+          const nameToUse = useCanonicalIds ? getCanonicalIdsName(item) : item;
+          if (nameToUse) counts.set(nameToUse, (counts.get(nameToUse) || 0) + 1); 
+      } 
+  });
   return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, n).map(([name, value]) => ({ name, value }));
 };
 
@@ -269,8 +300,8 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
     // FIX: Filter by dispensed_by for Pharmacists (not requested_by)
     const pharmacyHandled = source.filter(d => d.dispensed_by && PHARMACISTS.includes(d.dispensed_by)); 
     
-    // FIX: Filter by id_specialist for IDS (not dispensed_by)
-    const idsHandled = source.filter(d => d.id_specialist && IDS_SPECIALISTS.includes(d.id_specialist));
+    // FIX: Filter by id_specialist for IDS (not dispensed_by), using legacy-aware matching
+    const idsHandled = source.filter(d => d.id_specialist && (IDS_SPECIALISTS.includes(getCanonicalIdsName(d.id_specialist) || '') || isIdsNameMatch("Dr. Christoper John Tibayan", d.id_specialist)));
     
     // General
     const approvedItems = source.filter(i => i.status === PrescriptionStatus.APPROVED);
@@ -307,9 +338,23 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
       .filter(time => !isNaN(time) && time >= 0) as number[]; 
 
     const avgIdsTime = idsTimes.length > 0 ? formatDuration((idsTimes as number[]).reduce((a, b) => a + b, 0) / (idsTimes as number[]).length) : 'N/A';
+    
+    // Aggregating IDS stats using canonical name for Tibayan
+    const idsOutcomesMap = new Map<string, { approved: number, disapproved: number }>();
+    idsHandled.forEach(i => {
+        const name = getCanonicalIdsName(i.id_specialist) || 'Unknown';
+        const stats = idsOutcomesMap.get(name) || { approved: 0, disapproved: 0 };
+        if (i.status === PrescriptionStatus.APPROVED) stats.approved++;
+        if (i.status === PrescriptionStatus.DISAPPROVED) stats.disapproved++;
+        idsOutcomesMap.set(name, stats);
+    });
+
+    const totalApprovedIds = Array.from(idsOutcomesMap.values()).reduce((sum, s) => sum + s.approved, 0);
+    const totalDisapprovedIds = Array.from(idsOutcomesMap.values()).reduce((sum, s) => sum + s.disapproved, 0);
+
     const idsOutcomes = [
-      { name: 'Approved', value: idsHandled.filter(i => i.status === PrescriptionStatus.APPROVED).length },
-      { name: 'Disapproved', value: idsHandled.filter(i => i.status === PrescriptionStatus.DISAPPROVED).length }
+      { name: 'Approved', value: totalApprovedIds },
+      { name: 'Disapproved', value: totalDisapprovedIds }
     ];
     
     const getFindingsDistribution = (items: Prescription[]) => {
@@ -328,6 +373,7 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
 
     const avgTimePerIds = Object.entries((idsConsults as Prescription[]).reduce((acc: Record<string, number[]>, curr: Prescription) => {
         if (curr.id_specialist) { 
+            const canonicalName = getCanonicalIdsName(curr.id_specialist) || 'Unknown';
             const approvedTime = curr.ids_approved_at ? new Date(curr.ids_approved_at).getTime() : NaN;
             const disapprovedTime = curr.ids_disapproved_at ? new Date(curr.ids_disapproved_at).getTime() : NaN;
             const dispensedTime = curr.dispensed_date ? new Date(curr.dispensed_date).getTime() : NaN;
@@ -337,8 +383,8 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
             else if (!isNaN(disapprovedTime) && !isNaN(dispensedTime)) timeDiff = disapprovedTime - dispensedTime;
 
             if (timeDiff !== null && !isNaN(timeDiff) && timeDiff >= 0) {
-              if (!acc[curr.id_specialist]) acc[curr.id_specialist] = [];
-              acc[curr.id_specialist].push(timeDiff);
+              if (!acc[canonicalName]) acc[canonicalName] = [];
+              acc[canonicalName].push(timeDiff);
             }
         }
         return acc;
@@ -366,7 +412,7 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
       },
       restricted: {
         total: restrictedData.length,
-        approvalRate: (idsOutcomes[0].value / (idsOutcomes[0].value + idsOutcomes[1].value) * 100 || 0).toFixed(1) + '%',
+        approvalRate: (totalApprovedIds / (totalApprovedIds + totalDisapprovedIds) * 100 || 0).toFixed(1) + '%',
         avgIdsTime,
         topDrugs: getTopN(restrictedData.map(d => d.antimicrobial), 5),
         topIndications: getTopN(restrictedData.map(d => d.indication), 5),
@@ -387,8 +433,8 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
       },
       ids: {
         totalConsults: idsHandled.length, avgIdsTime,
-        approvalRate: (idsOutcomes[0].value / (idsOutcomes[0].value + idsOutcomes[1].value) * 100 || 0).toFixed(1) + '%',
-        topConsultants: getTopN(idsHandled.map(p => p.id_specialist), 5), 
+        approvalRate: (totalApprovedIds / (totalApprovedIds + totalDisapprovedIds) * 100 || 0).toFixed(1) + '%',
+        topConsultants: getTopN(idsHandled.map(p => p.id_specialist), 5, true), 
         outcomes: idsOutcomes,
         avgTimePerConsultant: avgTimePerIds
       }
@@ -489,7 +535,7 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
         return <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <KpiCard title="Total Restricted Requests" value={r.total} color="bg-purple-100 text-purple-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => d.drug_type === DrugType.RESTRICTED), title: 'All Restricted Requests'})}/>
-                <KpiCard title="IDS Approval Rate" value={r.approvalRate} color="bg-yellow-100 text-yellow-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => IDS_SPECIALISTS.includes(d.dispensed_by || '')), title: 'All IDS Consults'})}/>
+                <KpiCard title="IDS Approval Rate" value={r.approvalRate} color="bg-yellow-100 text-yellow-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => IDS_SPECIALISTS.includes(getCanonicalIdsName(d.id_specialist) || '')), title: 'All IDS Consults'})}/>
                 <KpiCard title="Avg. IDS Review Time" value={r.avgIdsTime} color="bg-yellow-100 text-yellow-700" icon={<></>}/>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -566,12 +612,12 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
         const i = processedData.ids;
         return <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <KpiCard title="Total IDS Consults" value={i.totalConsults} color="bg-teal-100 text-teal-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => d.id_specialist && IDS_SPECIALISTS.includes(d.id_specialist)), title: 'All IDS Consults'})}/>
-                <KpiCard title="IDS Approval Rate" value={i.approvalRate} color="bg-teal-100 text-teal-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => d.id_specialist && IDS_SPECIALISTS.includes(d.id_specialist)), title: 'All IDS Consults'})}/>
+                <KpiCard title="Total IDS Consults" value={i.totalConsults} color="bg-teal-100 text-teal-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => d.id_specialist && (IDS_SPECIALISTS.includes(getCanonicalIdsName(d.id_specialist) || '') || isIdsNameMatch("Dr. Christoper John Tibayan", d.id_specialist))), title: 'All IDS Consults'})}/>
+                <KpiCard title="IDS Approval Rate" value={i.approvalRate} color="bg-teal-100 text-teal-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => d.id_specialist && (IDS_SPECIALISTS.includes(getCanonicalIdsName(d.id_specialist) || '') || isIdsNameMatch("Dr. Christoper John Tibayan", d.id_specialist))), title: 'All IDS Consults'})}/>
                 <KpiCard title="Avg. IDS Turnaround Time" value={i.avgIdsTime} color="bg-teal-100 text-teal-700" icon={<></>} />
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Top5List title="Top 5 IDS Consultants by Reviews" data={i.topConsultants} color="bg-teal-200 text-teal-800" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => d.id_specialist && IDS_SPECIALISTS.includes(d.id_specialist)), title: 'All IDS Consults'})}/>
+                <Top5List title="Top 5 IDS Consultants by Reviews" data={i.topConsultants} color="bg-teal-200 text-teal-800" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => d.id_specialist && (IDS_SPECIALISTS.includes(getCanonicalIdsName(d.id_specialist) || '') || isIdsNameMatch("Dr. Christoper John Tibayan", d.id_specialist))), title: 'All IDS Consults'})}/>
                 <ChartWrapper title="IDS Decision Outcomes">
                   <ResponsiveContainer>
                     <PieChart>

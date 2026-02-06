@@ -219,7 +219,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     req_date: getTodayDate(),
     patient_name: '', hospital_number: '', patient_dob: '', age: '', sex: '', weight_kg: '', height_cm: '', ward: '',
     mode: 'adult' as 'adult' | 'pediatric',
-    diagnosis: '', system_site: '', system_site_other: '', sgpt: '', scr_mgdl: '', egfr_text: '',
+    diagnosis: '', system_site: '', system_site_other: '', sgpt: '', scr_mgdl: '', scr_date: '', egfr_text: '',
     antimicrobial: '', drug_type: DrugType.MONITORED as DrugType, dose: '', frequency: '', duration: '',
     route: 'IV',
     route_other: '',
@@ -278,6 +278,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
         req_date: initialData.req_date ? initialData.req_date.split('T')[0] : getTodayDate(),
         selectedIndicationType: (initialData.indication as any) || '',
         scr_mgdl: initialData.scr_mgdl === "Pending" ? "" : initialData.scr_mgdl,
+        scr_date: initialData.scr_date || '',
         mode: initialData.mode || 'adult',
         patient_dob: initialData.patient_dob || '',
         route: initialData.route || 'IV',
@@ -553,6 +554,10 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
       errors.scr_mgdl = 'Serum Creatinine is required unless marked as not yet available.';
     }
 
+    if (!scrNotAvailable && formData.scr_mgdl && !formData.scr_date) {
+      errors.scr_date = 'Date of SCr result is required if SCr is provided.';
+    }
+
     if (patientMode === 'pediatric' && (!formData.height_cm || String(formData.height_cm).trim() === '')) {
       errors.height_cm = 'Height is required for pediatric patients.';
     }
@@ -599,6 +604,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
       req_date: new Date(formData.req_date).toISOString(),
       timestamp: new Date().toISOString(),
       scr_mgdl: scrNotAvailable ? "Pending" : formData.scr_mgdl,
+      scr_date: scrNotAvailable ? null : formData.scr_date,
       indication: formData.selectedIndicationType,
       basis_indication: finalBasis,
       route: formData.route === 'Others' ? formData.route_other : formData.route,
@@ -838,13 +844,18 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                             )}
                         </FormGroup>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
                         <FormGroup label="Serum Creatinine (µmol/L)" error={validationErrors.scr_mgdl}>
                              <div className="flex items-center gap-2">
                                 <Input id="scr_mgdl" error={!!validationErrors.scr_mgdl} type="number" name="scr_mgdl" value={formData.scr_mgdl} onChange={handleChange} disabled={scrNotAvailable} className="flex-1" />
                                 <label className="flex items-center gap-1.5 cursor-pointer whitespace-nowrap"><input type="checkbox" checked={scrNotAvailable} onChange={e => setScrNotAvailable(e.target.checked)} className="rounded border-gray-300 text-green-600" /><span className="text-[10px] font-bold text-gray-400 uppercase">Pending</span></label>
                              </div>
                         </FormGroup>
+                        {!scrNotAvailable && formData.scr_mgdl && (
+                          <FormGroup label="SCr Result Date" error={validationErrors.scr_date}>
+                            <Input id="scr_date" error={!!validationErrors.scr_date} type="date" name="scr_date" value={formData.scr_date} onChange={handleChange} max={getTodayDate()} />
+                          </FormGroup>
+                        )}
                         <FormGroup label="SGPT (U/L)"><Input type="number" name="sgpt" value={formData.sgpt} onChange={handleChange} /></FormGroup>
                         <FormGroup label="Calculated eGFR"><div className="h-[38px] flex items-center px-3 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-blue-700">{formData.egfr_text}</div></FormGroup>
                     </div>
@@ -957,7 +968,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
 
         {/* Review Overlay */}
         {showReview && (
-            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4 backdrop-blur-md animate-fade-in" onClick={() => setShowReview(false)}>
+            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4 backdrop-blur-sm animate-fade-in" onClick={() => setShowReview(false)}>
                 <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-white/20 animate-slide-up font-['Inter']" onClick={e => e.stopPropagation()}>
                     <header className="bg-[#009a3e] text-white p-6 flex justify-between items-center shrink-0">
                         <div className="flex items-center gap-4">
@@ -992,8 +1003,8 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                                 <div className="space-y-6">
                                     <SummaryValue label="DIAGNOSIS" value={`${formData.diagnosis} (${formData.system_site === 'OTHERS (SPECIFY)' ? formData.system_site_other : formData.system_site})`} />
                                     <SummaryValue label="BASIS FOR INDICATION" value={`${formData.selectedBasisCategory}${formData.basis_indication_details ? ': ' + formData.basis_indication_details : ''}`} />
-                                    <div className="grid grid-cols-3 gap-2 pt-4 border-t border-gray-50">
-                                        <SummaryValue label="SCR" value={scrNotAvailable ? 'PENDING' : formData.scr_mgdl} />
+                                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-50">
+                                        <SummaryValue label="SCR" value={scrNotAvailable ? 'PENDING' : `${formData.scr_mgdl} (Date: ${formData.scr_date || 'N/A'})`} />
                                         <SummaryValue label="SGPT" value={formData.sgpt} />
                                         <SummaryValue label="EGFR" value={formData.egfr_text?.split(' ')?.[0] || '—'} />
                                     </div>
