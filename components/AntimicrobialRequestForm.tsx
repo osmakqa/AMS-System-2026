@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { DrugType, PrescriptionStatus, PreviousAntibiotic, Organism, Susceptibility } from '../types';
+import { DrugType, PrescriptionStatus, UserRole, PreviousAntibiotic, Organism, Susceptibility } from '../types';
 import { IDS_SPECIALISTS_ADULT, IDS_SPECIALISTS_PEDIATRIC, WARDS, LOGO_URL } from '../constants';
 import { ADULT_MONOGRAPHS } from '../data/adultMonographs';
 import { PEDIATRIC_MONOGRAPHS } from '../data/pediatricMonographs';
@@ -12,6 +12,7 @@ interface AntimicrobialRequestFormProps {
   onSubmit: (data: any) => void;
   loading: boolean;
   initialData?: any;
+  role?: UserRole;
 }
 
 const CLINICAL_DEPARTMENTS = [
@@ -154,7 +155,7 @@ interface PrevAbxRowProps {
 const PrevAbxRow: React.FC<PrevAbxRowProps> = ({ id, value, onChange, onRemove }) => (
   <div className="grid grid-cols-4 gap-2 items-center mb-1">
     <Input type="text" placeholder="Drug name" value={value.drug} onChange={(e) => onChange(id, 'drug', e.target.value)} />
-    <Input type="text" placeholder="Frequency" value={value.frequency} onChange={(id === 0 ? undefined : (e) => onChange(id, 'frequency', e.target.value))} />
+    <Input type="text" placeholder="Frequency" value={value.frequency} onChange={(e) => onChange(id, 'frequency', e.target.value)} />
     <Input type="text" placeholder="Duration" value={value.duration} onChange={(e) => onChange(id, 'duration', e.target.value)} />
     <button type="button" onClick={() => onRemove(id)} className="text-red-400 hover:text-red-600 p-1.5 rounded-full hover:bg-red-50 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
   </div>
@@ -213,7 +214,7 @@ const OrganismBlock: React.FC<OrganismBlockProps> = ({ id, value, onChange, onRe
   );
 };
 
-const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isOpen, onClose, onSubmit, loading, initialData }) => {
+const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isOpen, onClose, onSubmit, loading, initialData, role }) => {
   const [patientMode, setPatientMode] = useState<'adult' | 'pediatric'>('adult');
   const [formData, setFormData] = useState({
     req_date: getTodayDate(),
@@ -582,7 +583,8 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
   };
 
   const openReview = () => {
-    if (!validateForm()) {
+    // If the user is an AMS Admin, bypass mandatory field validation
+    if (role !== UserRole.AMS_ADMIN && !validateForm()) {
       const firstErrorField = Object.keys(validationErrors)[0] as string | undefined;
       if (firstErrorField) {
         const element = document.getElementById(firstErrorField);
@@ -629,10 +631,12 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
       findings: []
     };
 
+    // Remove internal UI-only state keys
     delete payload.selectedIndicationType;
     delete payload.selectedBasisCategory;
     delete payload.basis_indication_details;
 
+    // Remove empty values to keep doc clean
     Object.keys(payload).forEach(key => {
       if (payload[key] === '' || payload[key] === null || payload[key] === undefined) {
         delete payload[key];
@@ -751,7 +755,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                         <FormGroup label="Ward / Unit" className="md:col-span-2" error={validationErrors.ward}>
                              <Select id="ward" error={!!validationErrors.ward} value={isCustomWard ? 'Others' : formData.ward} onChange={(e) => { const v = e.target.value; if(v==='Others') setIsCustomWard(true); else { setIsCustomWard(false); setFormData(p=>({...p, ward: v})); } }}>
                                 <option value="">Select Ward</option>
-                                {WARDS.map(w => <option key={w} value={w}>{w}</option>)}
+                                {WARDS.map((w: string) => <option key={w} value={w}>{w}</option>)}
                                 <option value="Others">Others (Specify)</option>
                              </Select>
                              {isCustomWard && <Input error={!!validationErrors.ward} className="mt-2" placeholder="Specify..." value={formData.ward} onChange={e => setFormData(p=>({...p, ward: e.target.value}))} />}
@@ -1036,7 +1040,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                                                         <span className="font-bold">{b.name}</span>
                                                         {b.susceptibilities.filter(s => s.drug).length > 0 && (
                                                             <ul className="pl-2 mt-1 text-xs text-gray-600 border-l-2 border-gray-200">
-                                                                {b.susceptibilities.filter(s => s.drug).map((s, j) => (
+                                                                {b.susceptibilities.filter(s => s.drug).map((s: any, j: number) => (
                                                                     <li key={j}>{s.drug}: <span className={s.result === 'S' ? 'text-green-600 font-bold' : (s.result === 'R' ? 'text-red-600 font-bold' : '')}>{s.result}</span></li>
                                                                 ))}
                                                             </ul>
