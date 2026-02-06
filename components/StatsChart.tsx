@@ -421,9 +421,57 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
         return { name: monthName, value: count };
     });
 
+    // --- GENERAL ANALYSIS UPGRADES ---
+    const ageBrackets = [
+      { name: 'Pediatric (0-18)', value: 0 },
+      { name: 'Young Adult (19-35)', value: 0 },
+      { name: 'Middle Age (36-60)', value: 0 },
+      { name: 'Elderly (61+)', value: 0 },
+    ];
+
+    const drugDeptMap = new Map<string, Map<string, number>>();
+    const drugWardMap = new Map<string, Map<string, number>>();
+
+    source.forEach(item => {
+      // 1. Age Processing
+      const ageVal = parseInt(item.age || '0');
+      const isPediaStr = (item.age || '').toLowerCase().includes('mo') || (item.age || '').toLowerCase().includes('day') || (item.mode === 'pediatric');
+      
+      if (isPediaStr || ageVal <= 18) ageBrackets[0].value++;
+      else if (ageVal <= 35) ageBrackets[1].value++;
+      else if (ageVal <= 60) ageBrackets[2].value++;
+      else ageBrackets[3].value++;
+
+      // 2. Top Drug Per Dept
+      if (item.clinical_dept) {
+        const dMap = drugDeptMap.get(item.clinical_dept) || new Map<string, number>();
+        dMap.set(item.antimicrobial, (dMap.get(item.antimicrobial) || 0) + 1);
+        drugDeptMap.set(item.clinical_dept, dMap);
+      }
+
+      // 3. Top Drug Per Ward
+      if (item.ward) {
+        const wMap = drugWardMap.get(item.ward) || new Map<string, number>();
+        wMap.set(item.antimicrobial, (wMap.get(item.antimicrobial) || 0) + 1);
+        drugWardMap.set(item.ward, wMap);
+      }
+    });
+
+    const topDrugPerDept = Array.from(drugDeptMap.entries()).map(([dept, drugCounts]) => {
+      const top = Array.from(drugCounts.entries()).sort((a,b) => b[1] - a[1])[0];
+      return { name: dept, drug: top[0], value: top[1] };
+    }).sort((a,b) => b.value - a.value).slice(0, 10);
+
+    const topDrugPerWard = Array.from(drugWardMap.entries()).map(([ward, drugCounts]) => {
+      const top = Array.from(drugCounts.entries()).sort((a,b) => b[1] - a[1])[0];
+      return { name: ward, drug: top[0], value: top[1] };
+    }).sort((a,b) => b.value - a.value).slice(0, 10);
+
     return {
       general: {
-        totalRequests: source.length, approvalRate,
+        totalRequests: source.length, 
+        totalApproved: approvedItems.length,
+        approvalRate,
         adultCount: source.filter(p => p.mode === 'adult').length,
         pediaCount: source.filter(p => p.mode === 'pediatric').length,
         approvedTypeData: [{ name: DrugType.MONITORED, value: approvedItems.filter(i => i.drug_type === DrugType.MONITORED).length },{ name: DrugType.RESTRICTED, value: approvedItems.filter(i => i.drug_type === DrugType.RESTRICTED).length }],
@@ -432,7 +480,10 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
         topWards: getTopN(source.map(i => i.ward), 5),
         indicationData: getTopN(source.map(i => i.indication), 5),
         systemSiteData: getTopN(source.map(i => i.system_site === 'OTHERS (SPECIFY)' ? i.system_site_other : i.system_site), 10),
-        monthlyTrend
+        monthlyTrend,
+        ageGroupData: ageBrackets.filter(b => b.value > 0),
+        topDrugPerDept,
+        topDrugPerWard
       },
       restricted: {
         total: restrictedData.length,
@@ -493,6 +544,135 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
 
   const renderDashboard = () => {
     switch(activeTab) {
+      case 'General':
+        const g = processedData.general;
+        return <div className="space-y-6">
+            {/* Monthly Comparison Chart for "All Months" */}
+            {selectedMonth === -1 && (
+                <ChartWrapper title={`Monthly Request Trend (${selectedYear})`}>
+                    <ResponsiveContainer>
+                        <BarChart data={g.monthlyTrend} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="name" />
+                            <YAxis />
+                            <Tooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
+                            <Bar dataKey="value" name="Requests" fill="#009a3e" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </ChartWrapper>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <KpiCard title="Total Requests" value={g.totalRequests} color="bg-gray-100 text-gray-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests'})} />
+              <KpiCard title="Total Approved" value={g.totalApproved} color="bg-green-50 text-green-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => d.status === PrescriptionStatus.APPROVED), title: 'All Approved Requests'})} />
+              <KpiCard title="Overall Approval Rate" value={g.approvalRate} color="bg-blue-50 text-blue-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d=>d.status === 'approved' || d.status === 'disapproved'), title: 'All Finalized Requests'})} />
+              <KpiCard title="Adult vs. Pedia" value={`${g.adultCount} / ${g.pediaCount}`} subValue="Case Breakdown" color="bg-purple-50 text-purple-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests'})} />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <ChartWrapper title="Age Group Distribution">
+                <ResponsiveContainer>
+                  <PieChart>
+                    <Pie data={g.ageGroupData} dataKey="value" nameKey="name" outerRadius={100} label>
+                      {g.ageGroupData.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </ChartWrapper>
+              
+              <ChartWrapper title="Indication Distribution" onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests by Indication'})}>
+                <ResponsiveContainer>
+                  <PieChart>
+                    <Pie data={g.indicationData} dataKey="value" nameKey="name" outerRadius={100} label>
+                        {g.indicationData.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </ChartWrapper>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <ChartWrapper title="Top Antimicrobial per Department" heightClass="h-[500px]">
+                <ResponsiveContainer>
+                  <BarChart data={g.topDrugPerDept} layout="vertical" margin={{ left: 100, right: 30 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={100} />
+                    <Tooltip content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-xl text-xs">
+                              <p className="font-bold text-gray-900">{label}</p>
+                              <p className="text-blue-600 mt-1">Main Drug: <span className="font-black">{data.drug}</span></p>
+                              <p className="text-gray-500">Count: {data.value} requests</p>
+                            </div>
+                          );
+                        }
+                        return null;
+                    }} />
+                    <Bar dataKey="value" fill="#8884d8" radius={[0, 4, 4, 0]}>
+                       {g.topDrugPerDept.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartWrapper>
+
+              <ChartWrapper title="Top Antimicrobial per Ward/Unit" heightClass="h-[500px]">
+                <ResponsiveContainer>
+                  <BarChart data={g.topDrugPerWard} layout="vertical" margin={{ left: 120, right: 30 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={120} />
+                    <Tooltip content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-xl text-xs">
+                              <p className="font-bold text-gray-900">{label}</p>
+                              <p className="text-emerald-600 mt-1">Main Drug: <span className="font-black">{data.drug}</span></p>
+                              <p className="text-gray-500">Count: {data.value} requests</p>
+                            </div>
+                          );
+                        }
+                        return null;
+                    }} />
+                    <Bar dataKey="value" fill="#82ca9d" radius={[0, 4, 4, 0]}>
+                       {g.topDrugPerWard.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartWrapper>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <ChartWrapper title="System / Site Breakdown" onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests by System/Site'})}>
+                <ResponsiveContainer>
+                  <BarChart data={g.systemSiteData} layout="vertical" margin={{ left: 80 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={80} />
+                    <Tooltip />
+                    <Bar dataKey="value" fill="#00C49F" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartWrapper>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Top5List title="Top 5 Departments" data={g.topDepartments} color="bg-emerald-100 text-emerald-800" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests by Department'})} />
+                <Top5List title="Top 5 Wards / Units" data={g.topWards} color="bg-blue-100 text-blue-800" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests by Ward'})} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-6">
+              <Top5List title="Top 5 Antimicrobials (Overall)" data={g.topAntimicrobials} color="bg-gray-200 text-gray-800" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests'})} />
+            </div>
+        </div>
+
       case 'AMS Monitoring':
         const mon = processedMonitoring;
         return <div className="space-y-6 animate-fade-in">
@@ -708,6 +888,7 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
                             <BarChart data={overallInterventionData} layout="vertical" margin={{ left: 180, right: 30, top: 10, bottom: 10 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                                 <XAxis type="number" />
+                                {/* Changed fontWeights to fontWeight to fix TypeScript error */}
                                 <YAxis type="category" dataKey="name" width={170} tick={{ fontSize: 9, fontWeight: 'bold' }} />
                                 <Tooltip />
                                 <Bar dataKey="value" name="Cases" radius={[0, 4, 4, 0]}>
@@ -759,79 +940,8 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
                 </ChartWrapper>
             </div>
         </div>
-      default: // General
-        const g = processedData.general;
-        return <div className="space-y-6">
-            {/* Monthly Comparison Chart for "All Months" */}
-            {selectedMonth === -1 && (
-                <ChartWrapper title={`Monthly Request Trend (${selectedYear})`}>
-                    <ResponsiveContainer>
-                        <BarChart data={g.monthlyTrend} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                            <XAxis dataKey="name" />
-                            <YAxis />
-                            <Tooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
-                            <Bar dataKey="value" name="Requests" fill="#009a3e" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </ChartWrapper>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <KpiCard title="Total Requests" value={g.totalRequests} color="bg-gray-100 text-gray-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests'})} />
-              <KpiCard title="Overall Approval Rate" value={g.approvalRate} color="bg-gray-100 text-gray-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d=>d.status === 'approved' || d.status === 'disapproved'), title: 'All Finalized Requests'})} />
-              <KpiCard title="Adult vs. Pedia Caseload" value={`${g.adultCount} / ${g.pediaCount}`} subValue="Adult / Pedia" color="bg-gray-100 text-gray-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests'})} />
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <ChartWrapper title="Approved: Monitored vs Restricted" onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => d.status === 'approved'), title: 'All Approved Requests'})}>
-                <ResponsiveContainer>
-                  <PieChart>
-                    <Pie data={g.approvedTypeData} dataKey="value" nameKey="name" outerRadius={80} label>
-                      <Cell fill="#3b82f6"/><Cell fill="#a855f7"/>
-                    </Pie>
-                    <Tooltip content={<CustomTooltip/>}/>
-                    <Legend/>
-                  </PieChart>
-                </ResponsiveContainer>
-              </ChartWrapper>
-              
-              <ChartWrapper title="Indication Distribution" onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests by Indication'})}>
-                <ResponsiveContainer>
-                  <PieChart>
-                    <Pie data={g.indicationData} dataKey="value" nameKey="name" outerRadius={80} label>
-                        {g.indicationData.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </ChartWrapper>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <ChartWrapper title="System / Site Breakdown" onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests by System/Site'})}>
-                <ResponsiveContainer>
-                  <BarChart data={g.systemSiteData} layout="vertical" margin={{ left: 80 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                    <XAxis type="number" />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={80} />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="#00C49F" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartWrapper>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Top5List title="Top 5 Departments" data={g.topDepartments} color="bg-emerald-100 text-emerald-800" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests by Department'})} />
-                <Top5List title="Top 5 Wards / Units" data={g.topWards} color="bg-blue-100 text-blue-800" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests by Ward'})} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6">
-              <Top5List title="Top 5 Antimicrobials (Overall)" data={g.topAntimicrobials} color="bg-gray-200 text-gray-800" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests'})} />
-            </div>
-        </div>
+      default: // General Analysis already covered as 'General' case
+        return null;
     }
   }
 

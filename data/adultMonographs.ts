@@ -218,7 +218,7 @@ export const ADULT_MONOGRAPHS: { [key: string]: DrugMonograph } = {
     renal: "Avoid if eGFR <30 mL/min due to SBECD accumulation risk.",
     hepatic: "Check ALT/AST before and during therapy; avoid if markedly elevated.",
     duration: "5 days typical; up to 10 days for severe/ventilated; 3-day outpatient course for early disease.",
-    monitoring: "LFTs; watch for infusion reactions and bradycardia.",
+    monitoring: "LFTs; watch for infusion reactions and Flat bradycardia.",
     warnings: "ALT/AST elevations; hypersensitivity; infusion reactions; SBECD accumulation in low eGFR.",
     ams: "Restricted for COVID-19 cases following institutional protocols.",
     weightBased: false
@@ -285,6 +285,18 @@ export const ADULT_MONOGRAPHS: { [key: string]: DrugMonograph } = {
     monitoring: "LFTs.",
     warnings: "Avoid in neonates due to calcium-precipitation risk.",
     ams: "Monitored due to high overuse.",
+    weightBased: false
+  },
+  "Cefotaxime": {
+    restricted: false,
+    spectrum: "Third-generation cephalosporin with broad Gram-negative coverage; similar to ceftriaxone but with a shorter half-life, requiring more frequent dosing (q8h). Good CNS penetration.",
+    dosing: "1–2 g IV q8h. Up to 12 g/day for meningitis.",
+    renal: "CrCl < 20 mL/min: Administer 50% of the normal dose at the usual interval or the full dose at double the interval.",
+    hepatic: "No dosage adjustment required.",
+    duration: "Typically 7–14 days depending on the site of infection.",
+    monitoring: "Renal function, CBC (long-term therapy).",
+    warnings: "Hypersensitivity to beta-lactams; risk of C. difficile-associated diarrhea.",
+    ams: "Monitored antimicrobial; de-escalate as soon as susceptibility results are available.",
     weightBased: false
   },
   "Ceftazidime": {
