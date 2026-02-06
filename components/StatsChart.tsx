@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
   PieChart, Pie, Cell
@@ -7,6 +7,7 @@ import {
 import { Prescription, PrescriptionStatus, DrugType, AMSAudit, MonitoringPatient, AdminLogEntry } from '../types';
 import ChartDetailModal from './ChartDetailModal';
 import { IDS_SPECIALISTS, PHARMACISTS } from '../constants';
+import { summarizeOtherInterventions } from '../services/geminiService';
 
 interface StatsChartProps {
   data: Prescription[];
@@ -72,12 +73,15 @@ const normalizeLogEntry = (entry: string | AdminLogEntry | null): AdminLogEntry 
 };
 
 // --- Reusable UI Components ---
-const ChartWrapper = ({ title, children, onClick }: { title: string, children?: React.ReactNode, onClick?: () => void }) => (
+const ChartWrapper = ({ title, children, onClick, icon }: { title: string, children?: React.ReactNode, onClick?: () => void, icon?: React.ReactNode }) => (
   <div 
     className={`bg-white p-6 rounded-xl shadow-lg border border-gray-200 h-[400px] flex flex-col transition-all duration-300 ${onClick ? 'cursor-pointer hover:shadow-2xl hover:border-green-300 hover:-translate-y-1' : ''}`}
     onClick={onClick}
   >
-    <h3 className="text-md font-bold text-gray-800 mb-4">{title}</h3>
+    <div className="flex justify-between items-center mb-4">
+      <h3 className="text-md font-bold text-gray-800">{title}</h3>
+      {icon}
+    </div>
     <div className="flex-grow w-full h-full">{children}</div>
   </div>
 );
@@ -162,6 +166,10 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
   const [modeFilter, setModeFilter] = useState<'All' | 'adult' | 'pediatric'>('All');
   const [modalConfig, setModalConfig] = useState<{ isOpen: boolean; data: Prescription[]; title: string }>({ isOpen: false, data: [], title: '' });
   
+  // AI-Grouping State
+  const [aiOthersData, setAiOthersData] = useState<{ name: string, value: number }[]>([]);
+  const [isAnalyzingOthers, setIsAnalyzingOthers] = useState(false);
+
   const handleModalClose = () => setModalConfig({ isOpen: false, data: [], title: '' });
   
   const filteredMonitoringData = useMemo(() => {
@@ -371,6 +379,18 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
     
     const interventionStats = getFindingsDistribution(source);
 
+    // BREAKDOWN FOR 'OTHERS' IN PHARMACY FINDINGS
+    const otherDetailsList: string[] = [];
+    source.forEach(item => {
+        item.findings?.forEach(f => {
+            if (f.category === 'Others' && f.details) {
+                otherDetailsList.push(f.details.trim());
+            }
+        });
+    });
+    // Standard frequency fallback
+    const otherDetailsStats = getTopN(otherDetailsList, 10);
+
     const avgTimePerIds = Object.entries((idsConsults as Prescription[]).reduce((acc: Record<string, number[]>, curr: Prescription) => {
         if (curr.id_specialist) { 
             const canonicalName = getCanonicalIdsName(curr.id_specialist) || 'Unknown';
@@ -408,6 +428,10 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
         pediaCount: source.filter(p => p.mode === 'pediatric').length,
         approvedTypeData: [{ name: DrugType.MONITORED, value: approvedItems.filter(i => i.drug_type === DrugType.MONITORED).length },{ name: DrugType.RESTRICTED, value: approvedItems.filter(i => i.drug_type === DrugType.RESTRICTED).length }],
         topAntimicrobials: getTopN(source.map(i => i.antimicrobial), 5),
+        topDepartments: getTopN(source.map(i => i.clinical_dept), 5),
+        topWards: getTopN(source.map(i => i.ward), 5),
+        indicationData: getTopN(source.map(i => i.indication), 5),
+        systemSiteData: getTopN(source.map(i => i.system_site === 'OTHERS (SPECIFY)' ? i.system_site_other : i.system_site), 10),
         monthlyTrend
       },
       restricted: {
@@ -430,6 +454,8 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
         topPharmacists: getTopN(pharmacyHandled.map(p => p.dispensed_by), 5), 
         decisions: pharmacistDecisions,
         interventionStats, 
+        otherDetailsList, // Raw list for AI
+        otherDetailsStats // Raw breakdown for fallback
       },
       ids: {
         totalConsults: idsHandled.length, avgIdsTime,
@@ -440,6 +466,30 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
       }
     };
   }, [modeFilteredData, data, selectedYear]);
+
+  // --- AI Analysis Logic ---
+  useEffect(() => {
+    let isActive = true;
+    const runAI = async () => {
+      const remarks = processedData.pharmacy.otherDetailsList;
+      if (activeTab === 'Pharmacy' && remarks.length > 0) {
+        setIsAnalyzingOthers(true);
+        try {
+          const result = await summarizeOtherInterventions(remarks);
+          if (isActive) setAiOthersData(result);
+        } catch (err) {
+          console.error("AI Analysis failed", err);
+        } finally {
+          if (isActive) setIsAnalyzingOthers(false);
+        }
+      }
+    };
+    
+    // Clear old AI data when filters change significantly to avoid stale data flashing
+    setAiOthersData([]); 
+    const timer = setTimeout(runAI, 800);
+    return () => { isActive = false; clearTimeout(timer); };
+  }, [activeTab, processedData.pharmacy.otherDetailsList]);
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
@@ -569,6 +619,10 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
         </div>
       case 'Pharmacy':
         const p = processedData.pharmacy;
+        // Decide which data to show for the "Others" chart
+        const othersChartData = aiOthersData.length > 0 ? aiOthersData : p.otherDetailsStats;
+        const isUsingAI = aiOthersData.length > 0;
+
         return <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <KpiCard title="Total Requests Handled" value={p.totalHandled} color="bg-green-100 text-green-700" icon={<></>} />
@@ -606,6 +660,40 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
                         </ResponsiveContainer>
                     </ChartWrapper>
                 </div>
+            </div>
+
+            {/* Breakdown for 'Others' category in findings - WITH AI LOGIC GROUPING */}
+            <div className="grid grid-cols-1 gap-6">
+                <ChartWrapper 
+                  title={isUsingAI ? "AI-Grouped 'Others' Intervention Clusters" : "Top documented 'Others' Remarks"}
+                  icon={
+                    isAnalyzingOthers ? (
+                      <div className="flex items-center gap-2 animate-pulse text-indigo-600">
+                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        <span className="text-[10px] font-black uppercase tracking-widest">AI Categorizing Logic...</span>
+                      </div>
+                    ) : isUsingAI ? (
+                      <div className="bg-indigo-50 px-2 py-1 rounded-full flex items-center gap-1.5 border border-indigo-100 shadow-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-indigo-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" /></svg>
+                        <span className="text-[9px] font-black text-indigo-700 uppercase tracking-tighter">AI Analysis Active</span>
+                      </div>
+                    ) : null
+                  }
+                >
+                    {othersChartData.length > 0 ? (
+                        <ResponsiveContainer>
+                            <BarChart data={othersChartData} layout="vertical" margin={{ left: 180, right: 30, top: 10, bottom: 10 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                <XAxis type="number" />
+                                <YAxis type="category" dataKey="name" width={170} tick={{ fontSize: 9, fontWeight: 'bold' }} />
+                                <Tooltip />
+                                <Bar dataKey="value" name="Cases" fill={isUsingAI ? "#6366f1" : "#8884d8"} radius={[0, 4, 4, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="flex items-center justify-center h-full text-gray-400 italic font-medium">No specific 'Others' details documented for this period.</div>
+                    )}
+                </ChartWrapper>
             </div>
         </div>
       case 'IDS':
@@ -665,6 +753,7 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
               <KpiCard title="Overall Approval Rate" value={g.approvalRate} color="bg-gray-100 text-gray-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d=>d.status === 'approved' || d.status === 'disapproved'), title: 'All Finalized Requests'})} />
               <KpiCard title="Adult vs. Pedia Caseload" value={`${g.adultCount} / ${g.pediaCount}`} subValue="Adult / Pedia" color="bg-gray-100 text-gray-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests'})} />
             </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <ChartWrapper title="Approved: Monitored vs Restricted" onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => d.status === 'approved'), title: 'All Approved Requests'})}>
                 <ResponsiveContainer>
@@ -677,6 +766,40 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
                   </PieChart>
                 </ResponsiveContainer>
               </ChartWrapper>
+              
+              <ChartWrapper title="Indication Distribution" onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests by Indication'})}>
+                <ResponsiveContainer>
+                  <PieChart>
+                    <Pie data={g.indicationData} dataKey="value" nameKey="name" outerRadius={80} label>
+                        {g.indicationData.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </ChartWrapper>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <ChartWrapper title="System / Site Breakdown" onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests by System/Site'})}>
+                <ResponsiveContainer>
+                  <BarChart data={g.systemSiteData} layout="vertical" margin={{ left: 80 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={80} />
+                    <Tooltip />
+                    <Bar dataKey="value" fill="#00C49F" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartWrapper>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Top5List title="Top 5 Departments" data={g.topDepartments} color="bg-emerald-100 text-emerald-800" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests by Department'})} />
+                <Top5List title="Top 5 Wards / Units" data={g.topWards} color="bg-blue-100 text-blue-800" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests by Ward'})} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-6">
               <Top5List title="Top 5 Antimicrobials (Overall)" data={g.topAntimicrobials} color="bg-gray-200 text-gray-800" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests'})} />
             </div>
         </div>

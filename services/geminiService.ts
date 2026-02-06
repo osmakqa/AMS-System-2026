@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 
 // Removed top-level ai instance to follow guidelines of creating it right before the call.
@@ -15,6 +16,11 @@ interface PediatricCheckResult {
 interface WeightBasedCheckResult {
   status: 'SAFE' | 'WARNING';
   message: string;
+}
+
+interface AICategoryResult {
+  name: string;
+  value: number;
 }
 
 export const checkRenalDosing = async (
@@ -241,5 +247,68 @@ export const verifyWeightBasedDosing = async (
   } catch (error) {
     console.error("Weight Based Check AI Error:", error);
     return null;
+  }
+};
+
+export const summarizeOtherInterventions = async (remarks: string[]): Promise<AICategoryResult[]> => {
+  if (!remarks || remarks.length === 0) return [];
+
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+    const responseSchema = {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          name: { type: Type.STRING, description: "Concise logical clinical category name." },
+          value: { type: Type.NUMBER, description: "Number of original remarks that fall into this category." }
+        },
+        required: ["name", "value"]
+      }
+    };
+
+    const prompt = `
+      Act as a clinical data analyst for an Antimicrobial Stewardship program.
+      
+      Input: A list of raw text remarks written by pharmacists for interventions categorized as "Others".
+      
+      Remarks:
+      ${remarks.map((r, i) => `${i+1}. ${r}`).join('\n')}
+      
+      Task:
+      1. Analyze the clinical logic and reasoning in each remark.
+      2. Group semantically similar remarks into unified clinical categories.
+         Example: "Dose too high for renal function" and "Reduce dose for low CrCl" should be grouped under "Renal Dosing Adjustment".
+      3. Provide a count for each category.
+      4. Labels must be professional, concise, and uppercase (e.g., "WEIGHT-BASED DOSING ERROR").
+      
+      Output: A JSON array of objects with 'name' and 'value'. Sort by value descending.
+    `;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: responseSchema,
+        temperature: 0.2,
+      },
+    });
+
+    if (response.text) {
+      let jsonStr = response.text.trim();
+      if (jsonStr.startsWith("```json")) {
+        jsonStr = jsonStr.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+      } else if (jsonStr.startsWith("```")) {
+        jsonStr = jsonStr.replace(/^```\s*/, "").replace(/\s*```$/, "");
+      }
+      return JSON.parse(jsonStr) as AICategoryResult[];
+    }
+    return [];
+  } catch (error) {
+    console.error("AI Summarization Error:", error);
+    // Return empty so the UI falls back to raw data
+    return [];
   }
 };

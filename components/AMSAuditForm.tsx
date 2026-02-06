@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { createAudit, updateAudit } from '../services/dataService';
-import { AMSAudit } from '../types';
+import { AMSAudit, DrugType } from '../types';
 import AMSAuditSummary from './AMSAuditSummary';
 import { checkRenalDosing, verifyWeightBasedDosing, verifyPediatricDosing } from '../services/geminiService';
 import { ADULT_MONOGRAPHS } from '../data/adultMonographs';
@@ -1026,17 +1027,8 @@ const AMSAuditForm: React.FC<AMSAuditFormProps> = ({ isOpen, onClose, initialDat
 
   const handleInitialSubmit = () => {
     const errors = validate();
-    if (Object.keys(errors).length > 0) {
-      setValidationErrors(errors);
-      // Scroll to the first error
-      const firstErrorField = Object.keys(errors)[0];
-      const element = document.getElementById(firstErrorField);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-      return;
-    }
-    setValidationErrors({}); // Clear errors on success
+    // AMS can save even leaving mandatory field empty
+    setValidationErrors(errors);
     setShowReview(true);
   };
 

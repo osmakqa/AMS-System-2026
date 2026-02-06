@@ -120,6 +120,11 @@ function App() {
   const [historySearchQuery, setHistorySearchQuery] = useState<string>('');
   const [drugTypeFilter, setDrugTypeFilter] = useState<string>('All'); 
 
+  // New Filters for AMS Antimicrobials View
+  const [historyIndicationFilter, setHistoryIndicationFilter] = useState<string>('All');
+  const [historyWardFilter, setHistoryWardFilter] = useState<string>('All');
+  const [historyDeptFilter, setHistoryDeptFilter] = useState<string>('All');
+
   // --- Real-time Listeners (Firebase Replacement) ---
   useEffect(() => {
     if (!user) return;
@@ -334,17 +339,30 @@ function App() {
     setIsSubmitting(true);
     try {
       if (formData.id) {
-          const currentItem = data.find(i => i.id === formData.id);
-          const newStatus = user?.role === UserRole.AMS_ADMIN ? (currentItem?.status || PrescriptionStatus.PENDING) : PrescriptionStatus.PENDING;
-          
           const payload = { ...formData };
-          // If AMS ADMIN: DO NOT overwrite action timestamps
+          let newStatus: PrescriptionStatus | null = PrescriptionStatus.PENDING;
+
+          // If AMS ADMIN: TRACELESS EDIT LOGIC
           if (user?.role === UserRole.AMS_ADMIN) {
-              delete payload.dispensed_date;
-              delete payload.ids_approved_at;
-              delete payload.ids_disapproved_at;
-              delete payload.created_at;
-              delete payload.req_date; // Keep requested date as original
+              // 1. Preserve the current status by passing null to the update service
+              newStatus = null; 
+
+              // 2. Strict Whitelist of Clinical/Patient fields to ensure "No Trace" of metadata changes
+              const fieldsToKeep = [
+                  'patient_name', 'hospital_number', 'patient_dob', 'ward', 'age', 'sex', 
+                  'weight_kg', 'height_cm', 'mode', 'diagnosis', 'system_site', 
+                  'system_site_other', 'sgpt', 'scr_mgdl', 'scr_date', 'egfr_text', 
+                  'antimicrobial', 'dose', 'frequency', 'duration', 'route', 
+                  'indication', 'basis_indication', 'previous_antibiotics', 
+                  'organisms', 'specimen', 'resident_name', 'clinical_dept', 
+                  'service_resident_name', 'id_specialist', 'drug_type'
+              ];
+
+              Object.keys(payload).forEach(key => {
+                  if (!fieldsToKeep.includes(key)) {
+                      delete payload[key];
+                  }
+              });
           }
 
           await updatePrescriptionStatus(formData.id, newStatus, payload);
@@ -375,6 +393,9 @@ function App() {
       setHistoryAntimicrobialFilter('All');
       setHistorySearchQuery('');
       setDrugTypeFilter('All');
+      setHistoryIndicationFilter('All');
+      setHistoryWardFilter('All');
+      setHistoryDeptFilter('All');
     }
   };
 
@@ -626,9 +647,15 @@ function App() {
         return <StatsChart data={activeData} allData={activeData} auditData={auditData} monitoringData={monitoringData} role={user?.role} selectedMonth={selectedMonth} onMonthChange={setSelectedMonth} selectedYear={selectedYear} onYearChange={setSelectedYear} />;
       case 'Antimicrobials':
          let amsItems = viewData;
+         
+         // Apply AMS-specific Filters
          if (drugTypeFilter === 'Monitored') amsItems = amsItems.filter(i => i.drug_type === DrugType.MONITORED);
          else if (drugTypeFilter === 'Restricted') amsItems = amsItems.filter(i => i.drug_type === DrugType.RESTRICTED);
          
+         if (historyIndicationFilter !== 'All') amsItems = amsItems.filter(i => i.indication === historyIndicationFilter);
+         if (historyWardFilter !== 'All') amsItems = amsItems.filter(i => i.ward === historyWardFilter);
+         if (historyDeptFilter !== 'All') amsItems = amsItems.filter(i => i.clinical_dept === historyDeptFilter);
+
          if (historyStatusFilter === 'Deleted') {
             amsItems = amsItems.filter(i => i.status === PrescriptionStatus.DELETED);
          } else if (historyStatusFilter === 'All') {
@@ -636,26 +663,58 @@ function App() {
             amsItems = amsItems.filter(i => i.status !== PrescriptionStatus.DELETED);
          }
 
+         // Get dynamic filter values based on current set
+         const indications = Array.from(new Set(viewData.filter(i => i.indication).map(i => i.indication!))).sort();
+         const wards = Array.from(new Set(viewData.filter(i => i.ward).map(i => i.ward!))).sort();
+         const depts = Array.from(new Set(viewData.filter(i => i.clinical_dept).map(i => i.clinical_dept!))).sort();
+
          return (
            <div className="space-y-4">
-             <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-               <h3 className="text-lg font-bold text-gray-700">Antimicrobial Requests</h3>
-               <div className="flex flex-wrap items-center gap-4">
-                   <div className="flex items-center gap-2">
-                       <span className="text-xs font-semibold text-gray-500 uppercase">View:</span>
-                       <select 
-                        value={historyStatusFilter} 
-                        onChange={(e) => setHistoryStatusFilter(e.target.value)} 
-                        className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none [color-scheme:light]"
-                       >
-                            <option value="Active">All Active</option>
-                            <option value="Deleted">Show Deleted Only</option>
-                            <option value="All">All Requests (Incl. Deleted)</option>
+             <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+               <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
+                 <h3 className="text-lg font-bold text-gray-700">Antimicrobial Requests</h3>
+                 <div className="flex flex-wrap items-center justify-center gap-4">
+                     <div className="flex items-center gap-2">
+                         <span className="text-xs font-semibold text-gray-500 uppercase">View:</span>
+                         <select 
+                          value={historyStatusFilter} 
+                          onChange={(e) => setHistoryStatusFilter(e.target.value)} 
+                          className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none [color-scheme:light]"
+                         >
+                              <option value="Active">All Active</option>
+                              <option value="Deleted">Show Deleted Only</option>
+                              <option value="All">All Requests (Incl. Deleted)</option>
+                         </select>
+                     </div>
+                     <div className="flex items-center gap-2">
+                         <span className="text-xs font-semibold text-gray-500 uppercase">Drug Type:</span>
+                         <select value={drugTypeFilter} onChange={(e) => setDrugTypeFilter(e.target.value)} className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none [color-scheme:light]"><option value="All">All Types</option><option value="Monitored">Monitored</option><option value="Restricted">Restricted</option></select>
+                     </div>
+                 </div>
+               </div>
+
+               {/* New Filter Row for AMS */}
+               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-gray-100">
+                   <div className="flex flex-col gap-1">
+                       <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Indication</span>
+                       <select value={historyIndicationFilter} onChange={e => setHistoryIndicationFilter(e.target.value)} className="w-full bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none [color-scheme:light]">
+                            <option value="All">All Indications</option>
+                            {indications.map(v => <option key={v} value={v}>{v}</option>)}
                        </select>
                    </div>
-                   <div className="flex items-center gap-2">
-                       <span className="text-xs font-semibold text-gray-500 uppercase">Drug Type:</span>
-                       <select value={drugTypeFilter} onChange={(e) => setDrugTypeFilter(e.target.value)} className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none [color-scheme:light]"><option value="All">All Types</option><option value="Monitored">Monitored</option><option value="Restricted">Restricted</option></select>
+                   <div className="flex flex-col gap-1">
+                       <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Ward / Area</span>
+                       <select value={historyWardFilter} onChange={e => setHistoryWardFilter(e.target.value)} className="w-full bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none [color-scheme:light]">
+                            <option value="All">All Wards</option>
+                            {wards.map(v => <option key={v} value={v}>{v}</option>)}
+                       </select>
+                   </div>
+                   <div className="flex flex-col gap-1">
+                       <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Clinical Department</span>
+                       <select value={historyDeptFilter} onChange={e => setHistoryDeptFilter(e.target.value)} className="w-full bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none [color-scheme:light]">
+                            <option value="All">All Departments</option>
+                            {depts.map(v => <option key={v} value={v}>{v}</option>)}
+                       </select>
                    </div>
                </div>
              </div>
@@ -672,7 +731,14 @@ function App() {
     <>
       <UserManualModal isOpen={isUserManualOpen} onClose={() => setIsUserManualOpen(false)} />
       <WorkflowModal isOpen={isWorkflowModalOpen} onClose={() => setIsWorkflowModalOpen(false)} />
-      <AntimicrobialRequestForm isOpen={isAntimicrobialRequestFormOpen} onClose={() => { setIsAntimicrobialRequestFormOpen(false); setRequestToEdit(null); }} onSubmit={handleFormSubmission} loading={isSubmitting} initialData={requestToEdit} />
+      <AntimicrobialRequestForm 
+        isOpen={isAntimicrobialRequestFormOpen} 
+        onClose={() => { setIsAntimicrobialRequestFormOpen(false); setRequestToEdit(null); }} 
+        onSubmit={handleFormSubmission} 
+        loading={isSubmitting} 
+        initialData={requestToEdit}
+        role={user?.role} 
+      />
       <AMSAuditForm isOpen={isAMSAuditFormOpen} initialData={selectedAuditToEdit} onClose={() => { setIsAMSAuditFormOpen(false); setSelectedAuditToEdit(null); }} />
       <AMSAuditDetailModal isOpen={!!selectedAuditForView} onClose={() => setSelectedAuditForView(null)} audit={selectedAuditForView} />
       
