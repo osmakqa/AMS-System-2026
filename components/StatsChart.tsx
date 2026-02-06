@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
   PieChart, Pie, Cell
@@ -73,9 +73,9 @@ const normalizeLogEntry = (entry: string | AdminLogEntry | null): AdminLogEntry 
 };
 
 // --- Reusable UI Components ---
-const ChartWrapper = ({ title, children, onClick, icon }: { title: string, children?: React.ReactNode, onClick?: () => void, icon?: React.ReactNode }) => (
+const ChartWrapper = ({ title, children, onClick, icon, heightClass = "h-[400px]" }: { title: string, children?: React.ReactNode, onClick?: () => void, icon?: React.ReactNode, heightClass?: string }) => (
   <div 
-    className={`bg-white p-6 rounded-xl shadow-lg border border-gray-200 h-[400px] flex flex-col transition-all duration-300 ${onClick ? 'cursor-pointer hover:shadow-2xl hover:border-green-300 hover:-translate-y-1' : ''}`}
+    className={`bg-white p-6 rounded-xl shadow-lg border border-gray-200 ${heightClass} flex flex-col transition-all duration-300 ${onClick ? 'cursor-pointer hover:shadow-2xl hover:border-green-300 hover:-translate-y-1' : ''}`}
     onClick={onClick}
   >
     <div className="flex justify-between items-center mb-4">
@@ -389,7 +389,7 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
         });
     });
     // Standard frequency fallback
-    const otherDetailsStats = getTopN(otherDetailsList, 10);
+    const otherDetailsStats = getTopN(otherDetailsList, 15);
 
     const avgTimePerIds = Object.entries((idsConsults as Prescription[]).reduce((acc: Record<string, number[]>, curr: Prescription) => {
         if (curr.id_specialist) { 
@@ -467,31 +467,29 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
     };
   }, [modeFilteredData, data, selectedYear]);
 
-  // --- AI Analysis Logic ---
-  useEffect(() => {
-    let isActive = true;
-    const runAI = async () => {
-      const remarks = processedData.pharmacy.otherDetailsList;
-      if (activeTab === 'Pharmacy' && remarks.length > 0) {
-        setIsAnalyzingOthers(true);
-        try {
-          const result = await summarizeOtherInterventions(remarks);
-          if (isActive) setAiOthersData(result);
-        } catch (err) {
-          console.error("AI Analysis failed", err);
-        } finally {
-          if (isActive) setIsAnalyzingOthers(false);
-        }
-      }
-    };
+  // --- AI Manual Clustering Logic ---
+  const handleClusterOthers = async () => {
+    const remarks = processedData.pharmacy.otherDetailsList;
+    if (remarks.length === 0) return;
     
-    // Clear old AI data when filters change significantly to avoid stale data flashing
-    setAiOthersData([]); 
-    const timer = setTimeout(runAI, 800);
-    return () => { isActive = false; clearTimeout(timer); };
-  }, [activeTab, processedData.pharmacy.otherDetailsList]);
+    setIsAnalyzingOthers(true);
+    try {
+      const result = await summarizeOtherInterventions(remarks);
+      setAiOthersData(result);
+    } catch (err) {
+      console.error("AI Analysis failed", err);
+    } finally {
+      setIsAnalyzingOthers(false);
+    }
+  };
 
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+  // Reset AI data when filters change
+  useEffect(() => {
+    setAiOthersData([]);
+    setIsAnalyzingOthers(false);
+  }, [selectedMonth, selectedYear, modeFilter]);
+
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ff7300', '#00ced1', '#ffc0cb'];
 
   const renderDashboard = () => {
     switch(activeTab) {
@@ -619,8 +617,13 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
         </div>
       case 'Pharmacy':
         const p = processedData.pharmacy;
-        // Decide which data to show for the "Others" chart
-        const othersChartData = aiOthersData.length > 0 ? aiOthersData : p.otherDetailsStats;
+        
+        // --- NEW COMBINED DATA LOGIC ---
+        // Merge standard categories (except 'Others') with either AI-clustered 'Others' or raw top 'Others'
+        const baseInterventionData = p.interventionStats.filter(s => s.name !== 'Others');
+        const detailsData = aiOthersData.length > 0 ? aiOthersData : p.otherDetailsStats;
+        const overallInterventionData = [...baseInterventionData, ...detailsData].sort((a,b) => b.value - a.value);
+        
         const isUsingAI = aiOthersData.length > 0;
 
         return <div className="space-y-6">
@@ -646,7 +649,7 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
                     </ChartWrapper>
                 </div>
                 <div className="col-span-1">
-                    <ChartWrapper title="Intervention Findings">
+                    <ChartWrapper title="Intervention Findings (Summary)">
                         <ResponsiveContainer>
                             <PieChart>
                                 <Pie data={p.interventionStats} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
@@ -662,36 +665,62 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
                 </div>
             </div>
 
-            {/* Breakdown for 'Others' category in findings - WITH AI LOGIC GROUPING */}
+            {/* Overall Intervention Findings - COMBINED VIEW */}
             <div className="grid grid-cols-1 gap-6">
                 <ChartWrapper 
-                  title={isUsingAI ? "AI-Grouped 'Others' Intervention Clusters" : "Top documented 'Others' Remarks"}
+                  title={isUsingAI ? "Overall Intervention Findings (AI-Grouped 'Others')" : "Overall Intervention Findings"}
+                  heightClass="h-[600px]"
                   icon={
-                    isAnalyzingOthers ? (
-                      <div className="flex items-center gap-2 animate-pulse text-indigo-600">
-                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                        <span className="text-[10px] font-black uppercase tracking-widest">AI Categorizing Logic...</span>
-                      </div>
-                    ) : isUsingAI ? (
-                      <div className="bg-indigo-50 px-2 py-1 rounded-full flex items-center gap-1.5 border border-indigo-100 shadow-sm">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-indigo-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" /></svg>
-                        <span className="text-[9px] font-black text-indigo-700 uppercase tracking-tighter">AI Analysis Active</span>
-                      </div>
-                    ) : null
+                    <div className="flex items-center gap-3">
+                      {isAnalyzingOthers ? (
+                        <div className="flex items-center gap-2 animate-pulse text-indigo-600">
+                          <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                          <span className="text-[10px] font-black uppercase tracking-widest">AI Categorizing Others...</span>
+                        </div>
+                      ) : isUsingAI ? (
+                        <div className="flex items-center gap-2">
+                           <div className="bg-indigo-50 px-2.5 py-1 rounded-full flex items-center gap-1.5 border border-indigo-100 shadow-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-indigo-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" /></svg>
+                            <span className="text-[9px] font-black text-indigo-700 uppercase tracking-tighter">AI Summary Active</span>
+                          </div>
+                          <button 
+                            onClick={() => setAiOthersData([])}
+                            className="text-[9px] font-black text-gray-400 uppercase tracking-widest hover:text-red-500 transition-colors"
+                          >
+                            Reset AI
+                          </button>
+                        </div>
+                      ) : (
+                        <button 
+                          onClick={handleClusterOthers}
+                          disabled={p.otherDetailsList.length === 0}
+                          className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-indigo-700 transition-all shadow-md active:scale-95 disabled:bg-gray-300 disabled:shadow-none"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2 17.5 9.134a1 1 0 010 1.732l-3.354 1.935-1.18 4.455a1 1 0 01-1.933 0L9.854 12.8 6.5 10.866a1 1 0 010-1.732l3.354-1.935 1.18-4.455A1 1 0 0112 2z" clipRule="evenodd" /></svg>
+                          Cluster 'Others' with AI
+                        </button>
+                      )}
+                    </div>
                   }
                 >
-                    {othersChartData.length > 0 ? (
+                    {overallInterventionData.length > 0 ? (
                         <ResponsiveContainer>
-                            <BarChart data={othersChartData} layout="vertical" margin={{ left: 180, right: 30, top: 10, bottom: 10 }}>
+                            <BarChart data={overallInterventionData} layout="vertical" margin={{ left: 180, right: 30, top: 10, bottom: 10 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                                 <XAxis type="number" />
                                 <YAxis type="category" dataKey="name" width={170} tick={{ fontSize: 9, fontWeight: 'bold' }} />
                                 <Tooltip />
-                                <Bar dataKey="value" name="Cases" fill={isUsingAI ? "#6366f1" : "#8884d8"} radius={[0, 4, 4, 0]} />
+                                <Bar dataKey="value" name="Cases" radius={[0, 4, 4, 0]}>
+                                    {overallInterventionData.map((entry, index) => {
+                                        // Highlight standard categories in emerald, detail remarks/clusters in indigo/purple
+                                        const isStandard = p.interventionStats.some(s => s.name === entry.name && s.name !== 'Others');
+                                        return <Cell key={`cell-${index}`} fill={isStandard ? "#10b981" : (isUsingAI ? "#6366f1" : "#8884d8")} />;
+                                    })}
+                                </Bar>
                             </BarChart>
                         </ResponsiveContainer>
                     ) : (
-                        <div className="flex items-center justify-center h-full text-gray-400 italic font-medium">No specific 'Others' details documented for this period.</div>
+                        <div className="flex items-center justify-center h-full text-gray-400 italic font-medium">No intervention findings documented for this period.</div>
                     )}
                 </ChartWrapper>
             </div>
