@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Prescription, UserRole, PrescriptionStatus, DrugType, ActionType, RequestFinding, PreviousAntibiotic, Organism } from '../types';
 import { IDS_SPECIALISTS } from '../constants'; 
@@ -549,12 +548,14 @@ const DetailModal: React.FC<DetailModalProps> = ({ isOpen, onClose, item, role, 
                                 <h5 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Active Findings Log</h5>
                                 {findings.map((f, idx) => (
                                     <div key={idx} className="bg-red-50 border-l-4 border-red-400 p-3 rounded-lg shadow-sm relative group">
-                                        <button 
-                                            onClick={() => removeFinding(f.id)}
-                                            className="absolute top-2 right-2 text-red-300 hover:text-red-500 opacity-60 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity text-xl leading-none"
-                                        >
-                                            &times;
-                                        </button>
+                                        {role !== UserRole.PHARMACIST && (
+                                            <button 
+                                                onClick={() => removeFinding(f.id)}
+                                                className="absolute top-2 right-2 text-red-300 hover:text-red-500 opacity-60 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity text-xl leading-none"
+                                            >
+                                                &times;
+                                            </button>
+                                        )}
                                         <p className="text-[10px] font-black text-red-800 uppercase mb-1 tracking-tight">{f.section}</p>
                                         <p className="text-sm font-bold text-gray-900">{f.category}</p>
                                         <p className="text-xs text-gray-600 mt-1 leading-relaxed">{f.details}</p>

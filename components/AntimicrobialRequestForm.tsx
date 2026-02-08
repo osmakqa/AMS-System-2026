@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { DrugType, PrescriptionStatus, UserRole, PreviousAntibiotic, Organism, Susceptibility } from '../types';
 import { IDS_SPECIALISTS_ADULT, IDS_SPECIALISTS_PEDIATRIC, WARDS, LOGO_URL } from '../constants';
@@ -27,26 +26,55 @@ const CLINICAL_DEPARTMENTS = [
   "Physical and Rehabilitation Medicine"
 ];
 
-const SYSTEM_SITE_OPTIONS = [
-  "CNS",
-  "EYE",
-  "ENT",
-  "RESP",
-  "CVS",
-  "GI",
-  "SKIN & SOFT TISSUE",
-  "BONE/JOINTS",
-  "UTI",
-  "GENITO-URINARY",
-  "OBSTETRICS/GYNECOLOGY",
-  "SEPSIS",
-  "MALARIA",
-  "HIV",
-  "FEVER OF UNKNOWN ORIGIN",
-  "FEVER IN NEUTROPENIC PATIENT",
-  "LYMPHATICS",
-  "DISSEMINATED INFECTION",
-  "OTHERS (SPECIFY)"
+const DETAILED_SYSTEM_SITE_OPTIONS = [
+  { code: "CNS", description: "Infections of the Central Nervous System" },
+  { code: "Proph CNS", description: "Prophylaxis for CNS (neurosurgery, meningococcal)" },
+  { code: "EYE", description: "Therapy for Eye infections (e.g., endophthalmitis)" },
+  { code: "Proph EYE", description: "Prophylaxis for Eye operations" },
+  { code: "ENT", description: "Therapy for Ear, Nose, Throat infections including mouth, sinuses, larynx" },
+  { code: "Proph ENT", description: "Prophylaxis for Ear, Nose, Throat (surgical or medical)" },
+  { code: "AOM", description: "Acute otitis media" },
+  { code: "LUNG", description: "Lung abscess including aspergilloma" },
+  { code: "Proph RESP", description: "Pulmonary surgery, prophylaxis for respiratory pathogens" },
+  { code: "URTI", description: "Upper respiratory tract viral infections" },
+  { code: "Bron", description: "Acute bronchitis or exacerbations of chronic bronchitis" },
+  { code: "Pneu", description: "Pneumonia or LRTI (lower respiratory tract infections)" },
+  { code: "COVID-19", description: "Coronavirus disease caused by SARS-CoV-2 infection" },
+  { code: "TB", description: "Pulmonary tuberculosis" },
+  { code: "CF", description: "Cystic fibrosis" },
+  { code: "CVS", description: "Cardiovascular system infections: endocarditis, device infection" },
+  { code: "Proph CVS", description: "Cardiac or vascular surgery prophylaxis; endocarditis prophylaxis" },
+  { code: "GI", description: "Gastrointestinal infections (salmononellosis, Campylobacter, parasitic)" },
+  { code: "Proph GI", description: "Gastrointestinal tract surgery, liver/biliary tree procedures" },
+  { code: "IA", description: "Intra-abdominal sepsis including hepatobiliary and abscess" },
+  { code: "CDIF", description: "Clostridioides difficile infection" },
+  { code: "SST", description: "Skin and soft tissue infections: cellulitis, surgical site, abscess" },
+  { code: "Proph BJ", description: "Prophylaxis for Skin & Soft Tissue, plastic or orthopedic surgery" },
+  { code: "BJ", description: "Bone/Joint infections: septic arthritis, osteomyelitis" },
+  { code: "Cys", description: "Lower urinary tract infection (UTI): cystitis" },
+  { code: "Proph UTI", description: "Prophylaxis for urological surgery or recurrent UTI" },
+  { code: "Pye", description: "Upper UTI including catheter-related UTI, pyelonephritis" },
+  { code: "ASB", description: "Asymptomatic bacteriuria" },
+  { code: "OBGY", description: "Obstetric/gynecological infections, STD in women" },
+  { code: "Proph OBGY", description: "Prophylaxis for obstetric or gynecological surgery" },
+  { code: "GUM", description: "Genito-urinary males + prostatitis, epididymo-orchitis, STD in men" },
+  { code: "BAC", description: "Bacteraemia or fungaemia with no clear anatomic site and no shock" },
+  { code: "SEPSIS", description: "Sepsis of any origin, syndrome or septic shock with no clear anatomic site" },
+  { code: "Malaria", description: "Malaria" },
+  { code: "HIV", description: "Human immunodeficiency virus" },
+  { code: "PUO", description: "Pyrexia of Unknown Origin; fever syndrome without identified source" },
+  { code: "PUO-HO", description: "Fever syndrome in non-neutropenic hemato-oncology patients" },
+  { code: "FN", description: "Fever in the neutropenic patient" },
+  { code: "LYMPH", description: "Lymphatics as the primary source of infection" },
+  { code: "Sys-DI", description: "Disseminated infection (viral infections such as measles, CMV, etc.)" },
+  { code: "Other", description: "Antimicrobial prescribed with documentation but no defined diagnosis group" },
+  { code: "MP-GEN", description: "Medical prophylaxis in general without targeting a specific site" },
+  { code: "UNK", description: "Completely unknown indication" },
+  { code: "PROK", description: "Antimicrobial (e.g., erythromycin) prescribed for prokinetic use" },
+  { code: "MP-MAT", description: "Medical prophylaxis for maternal risk factors (e.g., PROM)" },
+  { code: "NEO-MP", description: "Medical prophylaxis for newborn risk factors (e.g., VLBW, IUGR)" },
+  { code: "CLD", description: "Chronic lung disease (bronchopulmonary dysplasia)" },
+  { code: "OTHERS (SPECIFY)", description: "Clinical site or infection type not listed above" }
 ];
 
 const INDICATION_TYPE_INFO: Record<string, { definition: string, example: string }> = {
@@ -214,8 +242,81 @@ const OrganismBlock: React.FC<OrganismBlockProps> = ({ id, value, onChange, onRe
   );
 };
 
+// --- System/Site Selector Command Palette Modal ---
+interface SystemSiteSelectorProps {
+  onSelect: (code: string) => void;
+  onClose: () => void;
+}
+
+const SystemSiteSelector: React.FC<SystemSiteSelectorProps> = ({ onSelect, onClose }) => {
+  const [search, setSearch] = useState("");
+  
+  const filtered = useMemo(() => {
+    return DETAILED_SYSTEM_SITE_OPTIONS.filter(opt => 
+      opt.code.toLowerCase().includes(search.toLowerCase()) || 
+      opt.description.toLowerCase().includes(search.toLowerCase())
+    );
+  }, [search]);
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[110] p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden border border-gray-100" onClick={e => e.stopPropagation()}>
+        <header className="bg-gray-800 p-5 text-white flex justify-between items-center shadow-lg">
+          <div>
+            <h3 className="font-black uppercase tracking-tight text-lg leading-tight">Infection System / Site</h3>
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Select from Diagnostic Codes Guide</p>
+          </div>
+          <button onClick={onClose} className="text-white/60 hover:text-white transition-all"><svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+        </header>
+        
+        <div className="p-4 border-b border-gray-100 bg-gray-50">
+          <div className="relative">
+            <input 
+              autoFocus
+              type="text" 
+              placeholder="Search site, syndrome, or example (e.g. pneumonia, abscess)..." 
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none transition-all shadow-sm"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+            <svg className="absolute left-3 top-3.5 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-2 md:p-4 space-y-1">
+          {filtered.length > 0 ? filtered.map(opt => (
+            <button 
+              key={opt.code} 
+              onClick={() => onSelect(opt.code)}
+              className="w-full flex items-start gap-4 p-3 md:p-4 text-left rounded-xl hover:bg-green-50 hover:border-green-200 border border-transparent transition-all group"
+            >
+              <div className="bg-gray-100 group-hover:bg-white group-hover:text-green-700 px-2 py-1 rounded font-mono text-[10px] md:text-xs font-black shrink-0 border border-gray-200 transition-colors uppercase tracking-tighter w-14 md:w-20 text-center">
+                {opt.code}
+              </div>
+              <div className="flex-1">
+                <p className="text-xs md:text-sm font-bold text-gray-800 group-hover:text-green-900 leading-snug">{opt.description}</p>
+              </div>
+              <div className="text-gray-300 group-hover:text-green-400 transition-colors">
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </div>
+            </button>
+          )) : (
+            <div className="text-center py-10 text-gray-400 italic">No diagnostic codes found matching your search.</div>
+          )}
+        </div>
+        
+        <footer className="p-3 bg-gray-50 border-t border-gray-100 text-center">
+            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Excludes prophylaxis options per stewardship protocol</p>
+        </footer>
+      </div>
+    </div>
+  );
+};
+
 const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isOpen, onClose, onSubmit, loading, initialData, role }) => {
   const [patientMode, setPatientMode] = useState<'adult' | 'pediatric'>('adult');
+  const [isSystemSiteSelectorOpen, setIsSystemSiteSelectorOpen] = useState(false);
+  
   const [formData, setFormData] = useState({
     req_date: getTodayDate(),
     patient_name: '', hospital_number: '', patient_dob: '', age: '', sex: '', weight_kg: '', height_cm: '', ward: '',
@@ -703,10 +804,25 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     return INDICATION_TYPE_INFO[formData.selectedIndicationType] || null;
   }, [formData.selectedIndicationType]);
 
+  const currentSystemSiteDesc = useMemo(() => {
+    const found = DETAILED_SYSTEM_SITE_OPTIONS.find(opt => opt.code === formData.system_site);
+    return found ? found.description : '';
+  }, [formData.system_site]);
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+      {isSystemSiteSelectorOpen && (
+        <SystemSiteSelector 
+          onClose={() => setIsSystemSiteSelectorOpen(false)} 
+          onSelect={(code) => {
+            setFormData(prev => ({ ...prev, system_site: code }));
+            setIsSystemSiteSelectorOpen(false);
+          }} 
+        />
+      )}
+      
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden border border-gray-100 relative" onClick={(e) => e.stopPropagation()}>
         
         {/* Main Header */}
@@ -767,20 +883,25 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                 <section className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
                     <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2">Clinical Data</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormGroup label="Primary Diagnosis" error={validationErrors.diagnosis}><Input id="diagnosis" error={!!validationErrors.diagnosis} name="diagnosis" value={formData.diagnosis} onChange={handleChange} placeholder="Primary working diagnosis" /></FormGroup>
+                        <FormGroup label="Infectious Disease Diagnosis" error={validationErrors.diagnosis}><Input id="diagnosis" error={!!validationErrors.diagnosis} name="diagnosis" value={formData.diagnosis} onChange={handleChange} placeholder="Infectious Disease working diagnosis" /></FormGroup>
+                        
                         <FormGroup label="System / Site" error={validationErrors.system_site}>
-                            <Select 
-                                id="system_site" 
-                                error={!!validationErrors.system_site} 
-                                name="system_site" 
-                                value={formData.system_site} 
-                                onChange={handleChange}
+                            <button 
+                              type="button"
+                              onClick={() => setIsSystemSiteSelectorOpen(true)}
+                              className={`w-full flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm outline-none transition-all text-left bg-white shadow-sm ${validationErrors.system_site ? 'border-red-500 text-red-900' : 'border-gray-300 text-gray-900 hover:border-green-500'}`}
                             >
-                                <option value="">Select System/Site...</option>
-                                {SYSTEM_SITE_OPTIONS.map(opt => (
-                                    <option key={opt} value={opt}>{opt}</option>
-                                ))}
-                            </Select>
+                              <span className="truncate">
+                                {formData.system_site ? (
+                                  <>
+                                    <span className="font-mono font-black text-green-700 mr-2">{formData.system_site}</span>
+                                    <span className="text-gray-500 truncate">{currentSystemSiteDesc}</span>
+                                  </>
+                                ) : "Click to select System/Site..."}
+                              </span>
+                              <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                            </button>
+                            
                             {formData.system_site === 'OTHERS (SPECIFY)' && (
                                 <Input 
                                     id="system_site_other" 
@@ -793,6 +914,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                                 />
                             )}
                         </FormGroup>
+
                         <FormGroup label="Indication Type" error={validationErrors.selectedIndicationType}>
                              <div id="selectedIndicationType" className={`flex gap-2 p-1 rounded-lg ${validationErrors.selectedIndicationType ? 'border border-red-500 bg-red-50' : ''}`}>
                                 {(['Empiric', 'Prophylactic', 'Therapeutic'] as const).map(ind => (
@@ -855,7 +977,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                                 <label className="flex items-center gap-1.5 cursor-pointer whitespace-nowrap"><input type="checkbox" checked={scrNotAvailable} onChange={e => setScrNotAvailable(e.target.checked)} className="rounded border-gray-300 text-green-600" /><span className="text-[10px] font-bold text-gray-400 uppercase">Pending</span></label>
                              </div>
                         </FormGroup>
-                        {!scrNotAvailable && (
+                        {(!scrNotAvailable && formData.scr_mgdl) && (
                           <FormGroup label="SCr Result Date" error={validationErrors.scr_date}>
                             <Input id="scr_date" error={!!validationErrors.scr_date} type="date" name="scr_date" value={formData.scr_date} onChange={handleChange} max={getTodayDate()} />
                           </FormGroup>
