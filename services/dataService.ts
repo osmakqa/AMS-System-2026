@@ -193,24 +193,37 @@ export const getNextArfNumber = async (): Promise<number> => {
 };
 
 export const backfillArfNumbers = async () => {
-  // Fetch everything in chronological order
-  const q = query(collection(db, 'requests'), orderBy('created_at', 'asc'));
-  const snapshot = await getDocs(q);
-  const batch = writeBatch(db);
+  // Fetch all documents. Using a raw collection fetch instead of a sorted query
+  // to avoid mandatory index requirements that might cause the button to "do nothing"
+  // if the index hasn't finished building or doesn't exist.
+  const colRef = collection(db, 'requests');
+  const snapshot = await getDocs(colRef);
   
+  const allDocs = snapshot.docs.map(d => ({
+    id: d.id,
+    ref: d.ref,
+    data: d.data() as Prescription
+  }));
+
+  // Sort in-memory by created_at or req_date
+  allDocs.sort((a, b) => {
+    const timeA = a.data.created_at || a.data.req_date || '';
+    const timeB = b.data.created_at || b.data.req_date || '';
+    return timeA.localeCompare(timeB);
+  });
+
+  const batch = writeBatch(db);
   let currentNum = 1;
-  snapshot.docs.forEach((docSnap) => {
-    const data = docSnap.data() as Prescription;
-    
-    // Check if status is explicitly deleted or equivalent
-    const isDeleted = data.status === PrescriptionStatus.DELETED;
+
+  allDocs.forEach((docItem) => {
+    const isDeleted = docItem.data.status === PrescriptionStatus.DELETED;
 
     if (!isDeleted) {
-      batch.update(docSnap.ref, { arf_number: currentNum });
+      batch.update(docItem.ref, { arf_number: currentNum });
       currentNum++;
     } else {
       // Ensure deleted records have no ARF number
-      batch.update(docSnap.ref, { arf_number: null });
+      batch.update(docItem.ref, { arf_number: null });
     }
   });
   

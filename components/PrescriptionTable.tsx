@@ -119,7 +119,7 @@ const PrescriptionTable: React.FC<PrescriptionTableProps> = ({ items, onAction, 
               <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider cursor-pointer select-none hover:bg-green-100" onClick={() => requestSort('ward')}>Ward {getSortIcon('ward')}</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider cursor-pointer select-none hover:bg-green-100" onClick={() => requestSort('antimicrobial')}>Antimicrobial {getSortIcon('antimicrobial')}</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider cursor-pointer select-none hover:bg-green-100" onClick={() => requestSort('status')}>Status {getSortIcon('status')}</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider cursor-pointer select-none hover:bg-green-100" onClick={() => requestSort('resident_name')}>In-Charge {getSortIcon('resident_name')}</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:bg-green-100" onClick={() => requestSort('resident_name')}>In-Charge {getSortIcon('resident_name')}</th>
               {!isHistoryView && (
                 <th className="px-6 py-3 text-right text-xs font-medium text-green-800 uppercase tracking-wider">Actions</th>
               )}
@@ -137,8 +137,8 @@ const PrescriptionTable: React.FC<PrescriptionTableProps> = ({ items, onAction, 
                   className={`hover:bg-gray-50 cursor-pointer transition-colors ${isWithinGroup ? 'bg-gray-50/30' : ''} ${isDeleted ? 'bg-gray-100/50 grayscale-[0.5]' : ''}`} 
                   onClick={() => onView(item)}
                 >
-                  <td className={`px-6 py-4 whitespace-nowrap text-sm font-black ${isDeleted ? 'text-gray-400 italic' : 'text-blue-700'}`}>
-                    {item.arf_number ? `ARF-${String(item.arf_number).padStart(4, '0')}` : <span className="text-gray-300 font-normal italic">Pending#</span>}
+                  <td className={`px-6 py-4 whitespace-nowrap text-sm font-normal ${isDeleted ? 'text-gray-400 italic' : 'text-black'}`}>
+                    {item.arf_number ? `ARF-${String(item.arf_number).padStart(4, '0')}` : <span className="text-gray-300 italic">Pending#</span>}
                   </td>
                   <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDeleted ? 'text-gray-400' : 'text-gray-500'}`}>{item.req_date ? new Date(item.req_date).toLocaleDateString() : '-'}</td>
                   
