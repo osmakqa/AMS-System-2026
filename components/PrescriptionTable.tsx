@@ -1,18 +1,21 @@
 
 import React, { useState, useMemo } from 'react';
 import { Prescription, PrescriptionStatus, ActionType } from '../types';
+import { WARDS } from '../constants';
 
 interface PrescriptionTableProps {
   items: Prescription[];
-  onAction: (id: string, action: ActionType) => void;
+  onAction: (id: string, action: ActionType, payload?: any) => void;
   onView: (item: Prescription) => void;
+  onUpdateWard?: (id: string, newWard: string) => void;
   statusType: PrescriptionStatus | 'ALL_VIEW';
   isHistoryView?: boolean;
 }
 
-const PrescriptionTable: React.FC<PrescriptionTableProps> = ({ items, onAction, onView, statusType, isHistoryView = false }) => {
+const PrescriptionTable: React.FC<PrescriptionTableProps> = ({ items, onAction, onView, onUpdateWard, statusType, isHistoryView = false }) => {
   // Use request_number as the primary sort key to ensure chronological sequence based on time of request
   const [sortConfig, setSortConfig] = useState<{ key: keyof Prescription | 'req_date' | 'request_number', direction: 'asc' | 'desc' }>({ key: 'request_number', direction: 'desc' });
+  const [editingWardId, setEditingWardId] = useState<string | null>(null);
 
   const sortedItems = useMemo(() => {
     let sortableItems = [...items];
@@ -114,6 +117,7 @@ const PrescriptionTable: React.FC<PrescriptionTableProps> = ({ items, onAction, 
                 <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider">Time</th>
               )}
               <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider cursor-pointer select-none hover:bg-green-100" onClick={() => requestSort('patient_name')}>Patient {getSortIcon('patient_name')}</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider cursor-pointer select-none hover:bg-green-100" onClick={() => requestSort('ward')}>Ward {getSortIcon('ward')}</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider cursor-pointer select-none hover:bg-green-100" onClick={() => requestSort('antimicrobial')}>Antimicrobial {getSortIcon('antimicrobial')}</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider cursor-pointer select-none hover:bg-green-100" onClick={() => requestSort('status')}>Status {getSortIcon('status')}</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider cursor-pointer select-none hover:bg-green-100" onClick={() => requestSort('resident_name')}>In-Charge {getSortIcon('resident_name')}</th>
@@ -160,6 +164,40 @@ const PrescriptionTable: React.FC<PrescriptionTableProps> = ({ items, onAction, 
                       )}
                     </td>
                   ) : null}
+
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {editingWardId === item.id ? (
+                      <select
+                        autoFocus
+                        className="bg-white border border-blue-500 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-blue-500 outline-none w-full max-w-[150px]"
+                        value={item.ward || ''}
+                        onBlur={() => setEditingWardId(null)}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          onUpdateWard?.(item.id, e.target.value);
+                          setEditingWardId(null);
+                        }}
+                      >
+                        <option value="">Select Ward</option>
+                        {WARDS.map(w => <option key={w} value={w}>{w}</option>)}
+                      </select>
+                    ) : (
+                      <div 
+                        className="cursor-pointer hover:text-blue-600 hover:underline flex items-center gap-1 group"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!isDeleted) setEditingWardId(item.id);
+                        }}
+                      >
+                        <span className={isDeleted ? 'text-gray-400' : ''}>{item.ward || <span className="text-gray-300 italic">None</span>}</span>
+                        {!isDeleted && (
+                          <svg className="h-3 w-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        )}
+                      </div>
+                    )}
+                  </td>
 
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className={`text-sm font-medium ${isDeleted ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{item.antimicrobial}</div>

@@ -29,6 +29,7 @@ import {
 } from './services/dataService';
 import { db } from './services/firebaseClient';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { WARDS } from './constants';
 
 const tabsConfig: Record<UserRole, string[]> = {
   [UserRole.PHARMACIST]: ['Pending', 'History', 'AMS Monitoring', 'Data Analysis'], 
@@ -120,10 +121,11 @@ function App() {
   const [historySearchQuery, setHistorySearchQuery] = useState<string>('');
   const [drugTypeFilter, setDrugTypeFilter] = useState<string>('All'); 
 
-  // New Filters for AMS Antimicrobials View
+  // Filters for History and Admin views
   const [historyIndicationFilter, setHistoryIndicationFilter] = useState<string>('All');
   const [historyWardFilter, setHistoryWardFilter] = useState<string>('All');
   const [historyDeptFilter, setHistoryDeptFilter] = useState<string>('All');
+  const [historyModeFilter, setHistoryModeFilter] = useState<string>('All');
 
   // --- Real-time Listeners (Firebase Replacement) ---
   useEffect(() => {
@@ -185,6 +187,14 @@ function App() {
 
   const handleViewDetails = (item: Prescription) => {
     setSelectedItemForView(item);
+  };
+
+  const handleUpdateWard = async (id: string, newWard: string) => {
+    try {
+      await updatePrescriptionStatus(id, null, { ward: newWard });
+    } catch (err: any) {
+      alert("Failed to update ward: " + err.message);
+    }
   };
 
   const handleActionClick = (id: string, type: ActionType, payload?: any) => {
@@ -396,6 +406,7 @@ function App() {
       setHistoryIndicationFilter('All');
       setHistoryWardFilter('All');
       setHistoryDeptFilter('All');
+      setHistoryModeFilter('All');
     }
   };
 
@@ -451,6 +462,14 @@ function App() {
         items = items.filter(i => i.antimicrobial === historyAntimicrobialFilter);
       }
 
+      if (historyWardFilter !== 'All') {
+        items = items.filter(i => i.ward === historyWardFilter);
+      }
+
+      if (historyModeFilter !== 'All') {
+        items = items.filter(i => i.mode === historyModeFilter.toLowerCase());
+      }
+
       return items;
     }
     
@@ -503,7 +522,7 @@ function App() {
                 Filters
                 </h3>
                 {activeTab === 'History' && (
-                    <div className="flex items-center gap-4 border-l pl-4 border-gray-200">
+                    <div className="flex items-center gap-4 border-l pl-4 border-gray-200 flex-wrap">
                         <div className="flex items-center gap-2">
                             <label className="text-xs font-semibold text-gray-500 uppercase">Status:</label>
                             <select
@@ -529,18 +548,30 @@ function App() {
                         </div>
                         {user?.role === UserRole.PHARMACIST && (
                             <div className="flex items-center gap-2 border-l pl-4 border-gray-100">
-                                <label className="text-xs font-semibold text-gray-500 uppercase">Drug Type:</label>
+                                <label className="text-xs font-semibold text-gray-500 uppercase">Type:</label>
                                 <select 
                                     value={drugTypeFilter} 
                                     onChange={(e) => setDrugTypeFilter(e.target.value)} 
                                     className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none [color-scheme:light]"
                                 >
-                                    <option value="All">All Types</option>
+                                    <option value="All">All Drugs</option>
                                     <option value="Monitored">Monitored</option>
                                     <option value="Restricted">Restricted</option>
                                 </select>
                             </div>
                         )}
+                        <div className="flex items-center gap-2 border-l pl-4 border-gray-100">
+                            <label className="text-xs font-semibold text-gray-500 uppercase">Mode:</label>
+                            <select 
+                                value={historyModeFilter} 
+                                onChange={(e) => setHistoryModeFilter(e.target.value)} 
+                                className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none [color-scheme:light]"
+                            >
+                                <option value="All">All Patients</option>
+                                <option value="Adult">Adult</option>
+                                <option value="Pediatric">Pediatric</option>
+                            </select>
+                        </div>
                     </div>
                 )}
             </div>
@@ -568,15 +599,26 @@ function App() {
                     />
                     <svg className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                 </div>
-                <div className="flex items-center gap-2 min-w-[200px]">
+                <div className="flex items-center gap-2 min-w-[150px]">
                     <label className="text-xs font-semibold text-gray-500 uppercase">Drug:</label>
                     <select
                         value={historyAntimicrobialFilter}
                         onChange={(e) => setHistoryAntimicrobialFilter(e.target.value)}
                         className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none [color-scheme:light]"
                     >
-                        <option value="All">All Antimicrobials</option>
+                        <option value="All">All Drugs</option>
                         {uniqueAntimicrobials.map(drug => <option key={drug} value={drug}>{drug}</option>)}
+                    </select>
+                </div>
+                <div className="flex items-center gap-2 min-w-[150px]">
+                    <label className="text-xs font-semibold text-gray-500 uppercase">Ward:</label>
+                    <select
+                        value={historyWardFilter}
+                        onChange={(e) => setHistoryWardFilter(e.target.value)}
+                        className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none [color-scheme:light]"
+                    >
+                        <option value="All">All Wards</option>
+                        {WARDS.map(w => <option key={w} value={w}>{w}</option>)}
                     </select>
                 </div>
              </div>
@@ -641,7 +683,7 @@ function App() {
         if (historyStatusFilter === 'Approved') tableStatusType = PrescriptionStatus.APPROVED;
         if (historyStatusFilter === 'Disapproved') tableStatusType = PrescriptionStatus.DISAPPROVED;
         if (historyStatusFilter === 'For IDS Approval') tableStatusType = PrescriptionStatus.FOR_IDS_APPROVAL;
-        return <PrescriptionTable items={viewData} onAction={handleActionClick} onView={handleViewDetails} statusType={tableStatusType} isHistoryView={true} />;
+        return <PrescriptionTable items={viewData} onAction={handleActionClick} onView={handleViewDetails} onUpdateWard={handleUpdateWard} statusType={tableStatusType} isHistoryView={true} />;
       case 'Data Analysis':
         const activeData = data.filter(i => i.status !== PrescriptionStatus.DELETED);
         return <StatsChart data={activeData} allData={activeData} auditData={auditData} monitoringData={monitoringData} role={user?.role} selectedMonth={selectedMonth} onMonthChange={setSelectedMonth} selectedYear={selectedYear} onYearChange={setSelectedYear} />;
@@ -693,7 +735,7 @@ function App() {
                  </div>
                </div>
 
-               {/* New Filter Row for AMS */}
+               {/* Filter Row for AMS */}
                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-gray-100">
                    <div className="flex flex-col gap-1">
                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Indication</span>
@@ -718,7 +760,7 @@ function App() {
                    </div>
                </div>
              </div>
-             <PrescriptionTable items={amsItems} onAction={handleActionClick} onView={handleViewDetails} statusType={'ALL_VIEW'} />
+             <PrescriptionTable items={amsItems} onAction={handleActionClick} onView={handleViewDetails} onUpdateWard={handleUpdateWard} statusType={'ALL_VIEW'} />
            </div>
          );
       default: return null;
