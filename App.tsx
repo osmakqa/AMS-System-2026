@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import Login from './components/Login';
 import Layout from './components/Layout';
@@ -25,7 +24,9 @@ import {
   createPrescription,
   deletePrescription,
   fetchAudits,
-  fetchUsers
+  fetchUsers,
+  backfillArfNumbers,
+  getNextArfNumber
 } from './services/dataService';
 import { db } from './services/firebaseClient';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
@@ -300,6 +301,18 @@ function App() {
       const updates: { [key: string]: any } = {};
       let statusToUpdate: PrescriptionStatus | null = null;
       
+      const item = data.find(i => i.id === id);
+      
+      // ARF# GENERATION LOGIC:
+      // If action is by Pharmacist and is Approve, Disapprove, or Forward
+      if (user.role === UserRole.PHARMACIST && [ActionType.APPROVE, ActionType.DISAPPROVE, ActionType.FORWARD_IDS].includes(type)) {
+          // If it doesn't have an ARF# yet, assign the next one
+          if (!item?.arf_number) {
+              const nextArf = await getNextArfNumber();
+              updates.arf_number = nextArf;
+          }
+      }
+
       if (![ActionType.FORWARD_IDS, ActionType.DELETE, ActionType.SAVE_FINDINGS, ActionType.RESEND, ActionType.ADMIN_EDIT].includes(type)) {
         if (user.role === UserRole.PHARMACIST) updates.dispensed_by = user.name;
         else if (user.role === UserRole.IDS) updates.id_specialist = user.name;
@@ -365,7 +378,7 @@ function App() {
                   'antimicrobial', 'dose', 'frequency', 'duration', 'route', 
                   'indication', 'basis_indication', 'previous_antibiotics', 
                   'organisms', 'specimen', 'resident_name', 'clinical_dept', 
-                  'service_resident_name', 'id_specialist', 'drug_type'
+                  'service_resident_name', 'id_specialist', 'drug_type', 'arf_number'
               ];
 
               Object.keys(payload).forEach(key => {
@@ -627,6 +640,19 @@ function App() {
     );
   };
 
+  const handleGenerateArfNumbers = async () => {
+      if (!window.confirm("This will regenerate ARF numbers for all entries sequentially based on creation time. Proceed?")) return;
+      setLoading(true);
+      try {
+          await backfillArfNumbers();
+          alert("ARF Numbers generated successfully!");
+      } catch (err: any) {
+          alert("Error: " + err.message);
+      } finally {
+          setLoading(false);
+      }
+  };
+
   const renderContent = () => {
     if (dbError) {
       return (
@@ -665,7 +691,7 @@ function App() {
         return (
           <div>
              <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6">
-                <div><h2 className="text-xl font-bold text-gray-800">{titleMap[user!.role]}</h2><p className="text-sm text-gray-500">Total: {viewData.length}</p></div>
+                <div><h2 className="text-xl font-bold text-black">{titleMap[user!.role]}</h2><p className="text-sm text-gray-500">Total: {viewData.length}</p></div>
                 {user?.role === UserRole.PHARMACIST && (<button onClick={() => { setRequestToEdit(null); setIsAntimicrobialRequestFormOpen(true); }} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm flex items-center gap-2 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>New Request</button>)}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -714,7 +740,17 @@ function App() {
            <div className="space-y-4">
              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
                <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
-                 <h3 className="text-lg font-bold text-gray-700">Antimicrobial Requests</h3>
+                 <div className="flex items-center gap-4">
+                    <h3 className="text-lg font-bold text-gray-700">Antimicrobial Requests</h3>
+                    <button 
+                        onClick={handleGenerateArfNumbers} 
+                        disabled={loading}
+                        className="text-xs font-black uppercase tracking-widest bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 shadow-sm transition-all disabled:bg-gray-300 flex items-center gap-2"
+                    >
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                        {loading ? 'Processing...' : 'Generate ARF#'}
+                    </button>
+                 </div>
                  <div className="flex flex-wrap items-center justify-center gap-4">
                      <div className="flex items-center gap-2">
                          <span className="text-xs font-semibold text-gray-500 uppercase">View:</span>

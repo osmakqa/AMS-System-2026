@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Prescription, PrescriptionStatus, ActionType } from '../types';
 import { WARDS } from '../constants';
@@ -13,18 +12,18 @@ interface PrescriptionTableProps {
 }
 
 const PrescriptionTable: React.FC<PrescriptionTableProps> = ({ items, onAction, onView, onUpdateWard, statusType, isHistoryView = false }) => {
-  // Use request_number as the primary sort key to ensure chronological sequence based on time of request
-  const [sortConfig, setSortConfig] = useState<{ key: keyof Prescription | 'req_date' | 'request_number', direction: 'asc' | 'desc' }>({ key: 'request_number', direction: 'desc' });
+  // Use arf_number or request_number as the primary sort key
+  const [sortConfig, setSortConfig] = useState<{ key: keyof Prescription | 'req_date' | 'request_number' | 'arf_number', direction: 'asc' | 'desc' }>({ key: 'request_number', direction: 'desc' });
   const [editingWardId, setEditingWardId] = useState<string | null>(null);
 
   const sortedItems = useMemo(() => {
     let sortableItems = [...items];
     if (sortConfig !== null) {
       sortableItems.sort((a, b) => {
-        const aVal = a[sortConfig.key as keyof Prescription] ?? (sortConfig.key === 'request_number' ? -1 : '');
-        const bVal = b[sortConfig.key as keyof Prescription] ?? (sortConfig.key === 'request_number' ? -1 : '');
+        const aVal = a[sortConfig.key as keyof Prescription] ?? (sortConfig.key === 'request_number' || sortConfig.key === 'arf_number' ? -1 : '');
+        const bVal = b[sortConfig.key as keyof Prescription] ?? (sortConfig.key === 'request_number' || sortConfig.key === 'arf_number' ? -1 : '');
         
-        // Handle numeric sorting for request_number
+        // Handle numeric sorting for numbers
         if (typeof aVal === 'number' && typeof bVal === 'number') {
             return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
         }
@@ -42,7 +41,7 @@ const PrescriptionTable: React.FC<PrescriptionTableProps> = ({ items, onAction, 
     if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
       direction = 'desc';
     }
-    setSortConfig({ key, direction });
+    setSortConfig({ key, direction } as any);
   };
 
   const getSortIcon = (key: keyof Prescription) => {
@@ -111,7 +110,7 @@ const PrescriptionTable: React.FC<PrescriptionTableProps> = ({ items, onAction, 
         <table className="min-w-full divide-y divide-gray-200 border-collapse relative">
           <thead className="bg-green-50 sticky top-0 z-20 shadow-sm">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider cursor-pointer select-none hover:bg-green-100" onClick={() => requestSort('request_number' as any)}>Req # {getSortIcon('request_number' as any)}</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider cursor-pointer select-none hover:bg-green-100" onClick={() => requestSort('arf_number' as any)}>ARF# {getSortIcon('arf_number' as any)}</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider cursor-pointer select-none hover:bg-green-100" onClick={() => requestSort('req_date')}>Date {getSortIcon('req_date')}</th>
               {isHistoryView && (
                 <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider">Time</th>
@@ -138,8 +137,8 @@ const PrescriptionTable: React.FC<PrescriptionTableProps> = ({ items, onAction, 
                   className={`hover:bg-gray-50 cursor-pointer transition-colors ${isWithinGroup ? 'bg-gray-50/30' : ''} ${isDeleted ? 'bg-gray-100/50 grayscale-[0.5]' : ''}`} 
                   onClick={() => onView(item)}
                 >
-                  <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${isDeleted ? 'text-gray-400 italic' : 'text-gray-900'}`}>
-                    {item.request_number ? `#${item.request_number}` : '-'}
+                  <td className={`px-6 py-4 whitespace-nowrap text-sm font-black ${isDeleted ? 'text-gray-400 italic' : 'text-blue-700'}`}>
+                    {item.arf_number ? `ARF-${String(item.arf_number).padStart(4, '0')}` : <span className="text-gray-300 font-normal italic">Pending#</span>}
                   </td>
                   <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDeleted ? 'text-gray-400' : 'text-gray-500'}`}>{item.req_date ? new Date(item.req_date).toLocaleDateString() : '-'}</td>
                   

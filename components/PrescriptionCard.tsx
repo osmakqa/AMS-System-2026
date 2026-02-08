@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Prescription, DrugType, PrescriptionStatus, UserRole, ActionType } from '../types';
 
@@ -37,9 +36,15 @@ const PrescriptionCard: React.FC<PrescriptionCardProps> = ({ item, onAction, onV
       onClick={() => onView(item)}
     >
       <div className="flex justify-between items-start mb-3">
-        <div className="flex items-center gap-2">
-            <span className="text-xs font-black text-gray-400 uppercase tracking-widest">#{item.request_number || 'DEL'}</span>
-            <span className={`text-xs font-bold uppercase tracking-wider ${isRestricted ? 'text-red-600' : 'text-blue-600'}`}>{item.drug_type}</span>
+        <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+                {item.arf_number ? (
+                    <span className="text-[10px] font-black bg-blue-600 text-white px-2 py-0.5 rounded shadow-sm uppercase tracking-tighter">ARF-{String(item.arf_number).padStart(4, '0')}</span>
+                ) : (
+                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">#{item.request_number || 'DEL'}</span>
+                )}
+                <span className={`text-[10px] font-bold uppercase tracking-wider ${isRestricted ? 'text-red-600' : 'text-blue-600'}`}>{item.drug_type}</span>
+            </div>
         </div>
         <div className="text-right">
             <div className="text-xs font-medium text-gray-500">{item.req_date ? new Date(item.req_date).toLocaleDateString() : 'No Date'}</div>

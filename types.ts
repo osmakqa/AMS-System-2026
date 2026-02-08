@@ -1,4 +1,3 @@
-
 export enum UserRole {
   PHARMACIST = 'PHARMACIST',
   IDS = 'IDS',
@@ -69,6 +68,7 @@ export interface Organism {
 export interface Prescription {
   id: string; 
   request_number: number;
+  arf_number?: number; // Added ARF# field
   created_at?: string;
   req_date: string;
   dispensed_date?: string; 

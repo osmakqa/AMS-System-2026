@@ -1,4 +1,3 @@
-
 import { db } from './firebaseClient';
 import { 
   collection, 
@@ -13,7 +12,9 @@ import {
   where,
   getDoc,
   setDoc,
-  Timestamp 
+  Timestamp,
+  writeBatch,
+  deleteField
 } from 'firebase/firestore';
 import { Prescription, PrescriptionStatus, AMSAudit, MonitoringPatient, User } from '../types';
 import { GOOGLE_SHEET_WEB_APP_URL } from '../constants';
@@ -120,14 +121,15 @@ export const updatePrescriptionStatus = async (
 };
 
 /**
- * Performs a soft delete. Discards the request number.
+ * Performs a soft delete. Discards the request number and ARF number.
  */
 export const deletePrescription = async (id: string) => {
   try {
     const docRef = doc(db, 'requests', id);
     await updateDoc(docRef, {
       status: PrescriptionStatus.DELETED,
-      request_number: null, // Discard the sequence number
+      request_number: null, 
+      arf_number: null, // Remove ARF# for deleted requests
       deleted_at: new Date().toISOString()
     });
     sendToGoogleSheet("Prescriptions_Deleted", { id: id, timestamp: new Date().toISOString() });
@@ -170,6 +172,49 @@ export const createPrescription = async (prescription: Partial<Prescription>) =>
     console.error('Create error:', err);
     throw err;
   }
+};
+
+/**
+ * ARF# HELPERS
+ */
+
+export const getNextArfNumber = async (): Promise<number> => {
+  // Query only for non-deleted records that already have an arf_number
+  const q = query(
+    collection(db, 'requests'), 
+    where('arf_number', '>', 0), 
+    orderBy('arf_number', 'desc'), 
+    limit(1)
+  );
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) return 1;
+  const lastEntry = snapshot.docs[0].data() as Prescription;
+  return (Number(lastEntry.arf_number) || 0) + 1;
+};
+
+export const backfillArfNumbers = async () => {
+  // Fetch everything in chronological order
+  const q = query(collection(db, 'requests'), orderBy('created_at', 'asc'));
+  const snapshot = await getDocs(q);
+  const batch = writeBatch(db);
+  
+  let currentNum = 1;
+  snapshot.docs.forEach((docSnap) => {
+    const data = docSnap.data() as Prescription;
+    
+    // Check if status is explicitly deleted or equivalent
+    const isDeleted = data.status === PrescriptionStatus.DELETED;
+
+    if (!isDeleted) {
+      batch.update(docSnap.ref, { arf_number: currentNum });
+      currentNum++;
+    } else {
+      // Ensure deleted records have no ARF number
+      batch.update(docSnap.ref, { arf_number: null });
+    }
+  });
+  
+  await batch.commit();
 };
 
 // --- AUDIT FUNCTIONS ---

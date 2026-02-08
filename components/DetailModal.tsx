@@ -324,7 +324,11 @@ const DetailModal: React.FC<DetailModalProps> = ({ isOpen, onClose, item, role, 
             <div className="flex items-center gap-2 md:gap-3 flex-wrap">
                 <h2 className="text-lg md:text-2xl font-bold truncate">{item.patient_name}</h2>
                 <div className="flex gap-1.5 shrink-0">
-                  <span className="px-2 md:px-3 py-0.5 rounded-full text-[9px] md:text-[10px] font-black bg-white/20 border border-white/30 backdrop-blur-md uppercase tracking-widest">#{item.request_number || 'N/A'}</span>
+                  {item.arf_number ? (
+                    <span className="px-2 md:px-3 py-0.5 rounded-full text-[10px] md:text-xs font-black bg-blue-600 border border-white/30 backdrop-blur-md uppercase tracking-widest">ARF-{String(item.arf_number).padStart(4, '0')}</span>
+                  ) : (
+                    <span className="px-2 md:px-3 py-0.5 rounded-full text-[9px] md:text-[10px] font-black bg-white/20 border border-white/30 backdrop-blur-md uppercase tracking-widest">#{item.request_number || 'N/A'}</span>
+                  )}
                   <span className="px-2 md:px-3 py-0.5 rounded-full text-[10px] md:text-xs font-bold bg-white/20 border border-white/30 backdrop-blur-md">{formatStatus(item.status)}</span>
                 </div>
             </div>
