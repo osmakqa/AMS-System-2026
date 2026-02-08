@@ -461,6 +461,7 @@ const AMSAuditForm: React.FC<AMSAuditFormProps> = ({ isOpen, onClose, initialDat
       weight: '', 
       height: '',
       scr: '', 
+      scrDate: '', // NEW
       egfr: '' 
   });
 
@@ -531,6 +532,7 @@ const AMSAuditForm: React.FC<AMSAuditFormProps> = ({ isOpen, onClose, initialDat
             weight: (initialData.diagnostics as any)?.weight || '',
             height: (initialData.diagnostics as any)?.height || '',
             scr: (initialData.diagnostics as any)?.scr || '',
+            scrDate: (initialData.diagnostics as any)?.scrDate || '', // Load SCr Date
             egfr: (initialData.diagnostics as any)?.egfr || ''
         });
 
@@ -911,6 +913,7 @@ const AMSAuditForm: React.FC<AMSAuditFormProps> = ({ isOpen, onClose, initialDat
     if (!patient.weight) errors.patient_weight = "Patient weight is required.";
     if (patientMode === 'pediatric' && !patient.height) errors.patient_height = "Patient height is required for pediatric eGFR.";
     if (!patient.scr) errors.patient_scr = "Patient SCr is required.";
+    if (patient.scr && !patient.scrDate) errors.patient_scrDate = "SCr Result Date is required.";
 
 
     if (dx.bioYN === 'Yes' && !dx.bioType) errors.dx_bioType = "Specify biomarker type.";
@@ -1012,6 +1015,7 @@ const AMSAuditForm: React.FC<AMSAuditFormProps> = ({ isOpen, onClose, initialDat
         weight: patient.weight,
         height: patient.height,
         scr: patient.scr,
+        scrDate: patient.scrDate, // Added SCr Date
         egfr: patient.egfr
       },
       history: {
@@ -1156,6 +1160,7 @@ const AMSAuditForm: React.FC<AMSAuditFormProps> = ({ isOpen, onClose, initialDat
                 <FormGroup label="Weight (kg)" required error={validationErrors.patient_weight}><Input type="number" name="weight" value={patient.weight} onChange={handlePatientChange} error={validationErrors.patient_weight} /></FormGroup>
                 <FormGroup label="Height (cm)" required={patientMode === 'pediatric'} error={validationErrors.patient_height}><Input type="number" name="height" value={patient.height} onChange={handlePatientChange} error={validationErrors.patient_height} /></FormGroup>
                 <FormGroup label="SCr (µmol/L)" required error={validationErrors.patient_scr}><Input type="number" name="scr" value={patient.scr} onChange={handlePatientChange} error={validationErrors.patient_scr} /></FormGroup>
+                <FormGroup label="SCr Result Date" required error={validationErrors.patient_scrDate}><Input type="date" name="scrDate" value={patient.scrDate} onChange={handlePatientChange} error={validationErrors.patient_scrDate} max={audit.date} /></FormGroup>
                 <FormGroup label="eGFR"><div className="rounded-lg border border-gray-300 px-3 py-2 text-sm bg-gray-100 text-gray-700">{patient.egfr || '—'}</div></FormGroup>
               </div>
             </div>

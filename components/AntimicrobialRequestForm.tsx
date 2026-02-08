@@ -855,7 +855,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                                 <label className="flex items-center gap-1.5 cursor-pointer whitespace-nowrap"><input type="checkbox" checked={scrNotAvailable} onChange={e => setScrNotAvailable(e.target.checked)} className="rounded border-gray-300 text-green-600" /><span className="text-[10px] font-bold text-gray-400 uppercase">Pending</span></label>
                              </div>
                         </FormGroup>
-                        {!scrNotAvailable && formData.scr_mgdl && (
+                        {!scrNotAvailable && (
                           <FormGroup label="SCr Result Date" error={validationErrors.scr_date}>
                             <Input id="scr_date" error={!!validationErrors.scr_date} type="date" name="scr_date" value={formData.scr_date} onChange={handleChange} max={getTodayDate()} />
                           </FormGroup>
