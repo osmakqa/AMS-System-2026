@@ -32,7 +32,6 @@ const DETAILED_SYSTEM_SITE_OPTIONS = [
   { code: "EYE", description: "Therapy for Eye infections (e.g., endophthalmitis)" },
   { code: "Proph EYE", description: "Prophylaxis for Eye operations" },
   { code: "ENT", description: "Therapy for Ear, Nose, Throat infections including mouth, sinuses, larynx" },
-  { code: "Proph ENT", description: "Prophylaxis for Ear, Nose, Throat (surgical or medical)" },
   { code: "AOM", description: "Acute otitis media" },
   { code: "LUNG", description: "Lung abscess including aspergilloma" },
   { code: "Proph RESP", description: "Pulmonary surgery, prophylaxis for respiratory pathogens" },
@@ -322,6 +321,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     patient_name: '', hospital_number: '', patient_dob: '', age: '', sex: '', weight_kg: '', height_cm: '', ward: '',
     mode: 'adult' as 'adult' | 'pediatric',
     diagnosis: '', system_site: '', system_site_other: '', sgpt: '', scr_mgdl: '', scr_date: '', egfr_text: '',
+    is_esrd: false,
     antimicrobial: '', drug_type: DrugType.MONITORED as DrugType, dose: '', frequency: '', duration: '',
     route: 'IV',
     route_other: '',
@@ -351,8 +351,9 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
   const nextOrganismId = React.useRef(1);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, type } = e.target as HTMLInputElement;
+    const val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
+    setFormData(prev => ({ ...prev, [name]: val }));
     
     if (validationErrors[name]) {
       setValidationErrors(prev => {
@@ -388,7 +389,8 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
         selectedBasisCategory: category,
         basis_indication_details: details,
         system_site: initialData.system_site || '',
-        system_site_other: initialData.system_site_other || ''
+        system_site_other: initialData.system_site_other || '',
+        is_esrd: initialData.is_esrd || false
       });
 
       if (initialData.scr_mgdl === "Pending") setScrNotAvailable(true);
@@ -883,7 +885,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                 <section className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
                     <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2">Clinical Data</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormGroup label="Infectious Disease Diagnosis" error={validationErrors.diagnosis}><Input id="diagnosis" error={!!validationErrors.diagnosis} name="diagnosis" value={formData.diagnosis} onChange={handleChange} placeholder="Infectious Disease working diagnosis" /></FormGroup>
+                        <FormGroup label="Primary Diagnosis" error={validationErrors.diagnosis}><Input id="diagnosis" error={!!validationErrors.diagnosis} name="diagnosis" value={formData.diagnosis} onChange={handleChange} placeholder="Primary working diagnosis" /></FormGroup>
                         
                         <FormGroup label="System / Site" error={validationErrors.system_site}>
                             <button 
@@ -972,12 +974,23 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
                         <FormGroup label="Serum Creatinine (µmol/L)" error={validationErrors.scr_mgdl}>
-                             <div className="flex items-center gap-2">
-                                <Input id="scr_mgdl" error={!!validationErrors.scr_mgdl} type="number" name="scr_mgdl" value={formData.scr_mgdl} onChange={handleChange} disabled={scrNotAvailable} className="flex-1" />
-                                <label className="flex items-center gap-1.5 cursor-pointer whitespace-nowrap"><input type="checkbox" checked={scrNotAvailable} onChange={e => setScrNotAvailable(e.target.checked)} className="rounded border-gray-300 text-green-600" /><span className="text-[10px] font-bold text-gray-400 uppercase">Pending</span></label>
+                             <div className="flex flex-col gap-2">
+                                <div className="flex items-center gap-2">
+                                    <Input id="scr_mgdl" error={!!validationErrors.scr_mgdl} type="number" name="scr_mgdl" value={formData.scr_mgdl} onChange={handleChange} disabled={scrNotAvailable} className="flex-1" />
+                                    <div className="flex items-center gap-3">
+                                        <label className="flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
+                                            <input type="checkbox" checked={scrNotAvailable} onChange={e => setScrNotAvailable(e.target.checked)} className="rounded border-gray-300 text-green-600 h-4 w-4" />
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase">Pending</span>
+                                        </label>
+                                        <label className="flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
+                                            <input type="checkbox" name="is_esrd" checked={formData.is_esrd} onChange={handleChange} className="rounded border-gray-300 text-red-600 h-4 w-4" />
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase">ESRD</span>
+                                        </label>
+                                    </div>
+                                </div>
                              </div>
                         </FormGroup>
-                        {(!scrNotAvailable && formData.scr_mgdl) && (
+                        {!scrNotAvailable && formData.scr_mgdl && (
                           <FormGroup label="SCr Result Date" error={validationErrors.scr_date}>
                             <Input id="scr_date" error={!!validationErrors.scr_date} type="date" name="scr_date" value={formData.scr_date} onChange={handleChange} max={getTodayDate()} />
                           </FormGroup>
@@ -1123,8 +1136,15 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                             </SummaryCard>
 
                             <SummaryCard title="Clinical Findings">
-                                <div className="mb-4 inline-flex items-center px-3 py-1 rounded-full bg-yellow-100 text-yellow-800 text-[10px] font-black uppercase tracking-widest border border-yellow-200">
-                                    {formData.selectedIndicationType} Indication
+                                <div className="flex gap-2 mb-4">
+                                    <div className="inline-flex items-center px-3 py-1 rounded-full bg-yellow-100 text-yellow-800 text-[10px] font-black uppercase tracking-widest border border-yellow-200">
+                                        {formData.selectedIndicationType} Indication
+                                    </div>
+                                    {formData.is_esrd && (
+                                        <div className="inline-flex items-center px-3 py-1 rounded-full bg-red-100 text-red-800 text-[10px] font-black uppercase tracking-widest border border-red-200">
+                                            ESRD Status
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="space-y-6">
                                     <SummaryValue label="DIAGNOSIS" value={`${formData.diagnosis} (${formData.system_site === 'OTHERS (SPECIFY)' ? formData.system_site_other : formData.system_site})`} />

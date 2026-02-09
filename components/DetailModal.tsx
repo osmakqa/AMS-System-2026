@@ -411,7 +411,13 @@ const DetailModal: React.FC<DetailModalProps> = ({ isOpen, onClose, item, role, 
                             <InfoItem label="SGPT" value={item.sgpt} />
                             <InfoItem label="SCr" value={item.scr_mgdl} />
                             {item.scr_date && <InfoItem label="SCr Date" value={new Date(item.scr_date).toLocaleDateString()} fullWidth />}
-                            <InfoItem label="eGFR" value={item.egfr_text} fullWidth />
+                            <div className="col-span-full">
+                                <p className="text-xs text-gray-500 uppercase font-semibold">eGFR</p>
+                                <div className="flex items-center gap-2">
+                                    <p className="text-sm text-gray-900 font-medium">{item.egfr_text || '-'}</p>
+                                    {item.is_esrd && <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-black uppercase border border-red-200">ESRD</span>}
+                                </div>
+                            </div>
                         </div>
                     </SelectableSection>
                     
@@ -424,6 +430,9 @@ const DetailModal: React.FC<DetailModalProps> = ({ isOpen, onClose, item, role, 
                             </div>
                             <div className="grid grid-cols-2 gap-2">
                                 <InfoItem label="Frequency" value={item.frequency} />
+                                <InfoItem label="Route" value={item.route} />
+                            </div>
+                            <div className="grid grid-cols-1">
                                 <InfoItem label="Duration" value={item.duration} />
                             </div>
                         </div>

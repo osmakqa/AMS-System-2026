@@ -94,6 +94,7 @@ export interface Prescription {
   scr_mgdl?: string;
   scr_date?: string;
   egfr_text?: string;
+  is_esrd?: boolean; // Added ESRD field
 
   antimicrobial: string;
   drug_type: DrugType;
