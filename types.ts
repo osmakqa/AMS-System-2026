@@ -41,7 +41,7 @@ export enum ActionType {
 export interface RequestFinding {
   id: string;
   section: string;
-  category: 'Wrong Choice' | 'Wrong Route' | 'Wrong Dose' | 'Wrong Duration' | 'No Infection' | 'Others';
+  category: 'Wrong Choice' | 'Wrong Route' | 'Wrong Dose' | 'Wrong Duration' | 'No Infection' | 'Others' | 'Wrong Frequency' | 'Duplicate ARF' | 'Outdated Creatinine Used' | 'Wrong Indication Type' | 'Wrong Age' | 'Wrong or No Unit Dose' | 'Wrong Patient Information';
   details: string;
   timestamp: string;
   user: string;

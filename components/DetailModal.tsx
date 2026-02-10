@@ -111,6 +111,13 @@ const FINDING_CATEGORIES = [
   'Wrong Dose',
   'Wrong Duration',
   'No Infection',
+  'Wrong Frequency',
+  'Duplicate ARF',
+  'Outdated Creatinine Used',
+  'Wrong Indication Type',
+  'Wrong Age',
+  'Wrong or No Unit Dose',
+  'Wrong Patient Information',
   'Others'
 ];
 
