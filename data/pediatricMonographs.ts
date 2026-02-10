@@ -1,4 +1,3 @@
-
 import { DrugType } from '../types';
 
 export interface DrugMonograph {
@@ -98,7 +97,7 @@ export const PEDIATRIC_MONOGRAPHS: { [key: string]: DrugMonograph } = {
   },
   "Ciprofloxacin": {
     spectrum: "Fluoroquinolone with strong Gram-negative (including Pseudomonas) and limited Gram-positive and atypical coverage.",
-    dosing: "10–15 mg/kg/dose PO or IV q12h (max 400 mg IV/dose or 750 mg PO/dose).",
+    dosing: "10–15 mg/kg/dose PO or IV q12h (max 400 IV/dose or 750 mg PO/dose).",
     renal: "Adjust dose/interval in moderate to severe renal impairment.",
     hepatic: "Generally no dose adjustment; monitor in significant hepatic dysfunction.",
     duration: "Usually 7–14 days; longer for osteomyelitis, deep-seated infection.",
@@ -142,7 +141,7 @@ export const PEDIATRIC_MONOGRAPHS: { [key: string]: DrugMonograph } = {
     hepatic: "Use with caution in significant hepatic impairment.",
     duration: "Usually 5–10 days for mucocutaneous infections; longer for zoster or immunocompromised hosts.",
     monitoring: "Renal function; clinical response.",
-    warnings: "Limited pediatric data in younger age groups; use per specialist guidance.",
+    warnings: "Limited pediatric data in some age groups; use per specialist guidance.",
     ams: "Use for HSV/VZV when oral therapy appropriate and adherence feasible.",
     weightBased: true,
     mgPerKgDose: 25,
@@ -175,6 +174,19 @@ export const PEDIATRIC_MONOGRAPHS: { [key: string]: DrugMonograph } = {
     restricted: true
   },
   "Imipenem": {
+    spectrum: "Broad-spectrum carbapenem coverage including Gram-positive, Gram-negative, and anaerobic coverage.",
+    dosing: "15–25 mg/kg/dose IV q6h (max 500 mg/dose).",
+    renal: "Adjustment required in renal impairment.",
+    hepatic: "No routine adjustment required.",
+    duration: "7–14 days.",
+    monitoring: "Renal function, CBC, neurologic status.",
+    warnings: "Seizure risk, especially in patients with CNS disorders.",
+    ams: "Restricted. Reserve for severe MDR infections.",
+    weightBased: true,
+    mgPerKgDose: 20,
+    restricted: true
+  },
+  "Imipenem-Cilastatin": {
     spectrum: "Carbapenem with very broad Gram-negative, Gram-positive, and anaerobic coverage including some Pseudomonas.",
     dosing: "15–25 mg/kg/dose IV q6h (max 500 mg/dose) depending on severity and age.",
     renal: "Adjust dose/interval in renal impairment; seizure risk increases with high levels.",

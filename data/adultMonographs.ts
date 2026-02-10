@@ -1,4 +1,3 @@
-
 import { DrugType } from '../types';
 
 export interface DrugMonograph {
@@ -152,6 +151,18 @@ export const ADULT_MONOGRAPHS: { [key: string]: DrugMonograph } = {
     weightBased: true
   },
   "Imipenem": {
+    restricted: true,
+    spectrum: "Broad-spectrum carbapenem. Activity similar to Imipenem-Cilastatin but requested as a separate restricted entity.",
+    dosing: "Typical dose 500mg IV q6h or 1g IV q8h. Adjust for renal function.",
+    renal: "CrCl < 70: adjustment required. CrCl < 15: avoid unless on dialysis.",
+    hepatic: "No routine adjustment required.",
+    duration: "7–14 days for most infections.",
+    monitoring: "Renal function, seizure threshold.",
+    warnings: "Risk of seizures; drug interaction with valproic acid.",
+    ams: "Restricted carbapenem. Use strictly for MDR GNB or polymicrobial infections.",
+    weightBased: false
+  },
+  "Imipenem-Cilastatin": {
     restricted: true,
     spectrum: "Very broad-spectrum: Enterobacterales (including ESBL), Pseudomonas, anaerobes, Gram-positive (not MRSA).",
     dosing: "500 mg IV q6h OR 1 g IV q8h. Use prolonged infusion when treating resistant organisms.",

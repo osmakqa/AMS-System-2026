@@ -1,4 +1,3 @@
-
 import { UserRole } from './types';
 
 export const PHARMACISTS = [
@@ -78,14 +77,14 @@ export const WARDS = [
 ].sort();
 
 export const MONITORED_DRUGS = [
-  "Imipenem", "Meropenem", "Ertapenem", "Doripenem", "Gentamicin", 
+  "Meropenem", "Ertapenem", "Doripenem", "Gentamicin", 
   "Amikacin", "Ciprofloxacin", "Levofloxacin", "Moxifloxacin", 
   "Aztreonam", "Ceftolozane-Tazobactam", "Colistin", "Linezolid", 
   "Tigecycline", "Vancomycin", "Cefepime", "Fluconazole oral", "Cefotaxime"
 ].sort();
 
 export const RESTRICTED_DRUGS = [
-  "Ciprofloxacin", "Levofloxacin", "Moxifloxacin", "Ceftriaxone", 
+  "Imipenem", "Imipenem-Cilastatin", "Ciprofloxacin", "Levofloxacin", "Moxifloxacin", "Ceftriaxone", 
   "Ceftazidime", "Cefixime", "Cefpodoxime", 
   "Gentamicin", "Amikacin", "Clindamycin", "Fluconazole IV"
 ].sort();
