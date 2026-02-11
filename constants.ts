@@ -12,6 +12,7 @@ export const PHARMACISTS = [
   "Enriquez, Joan M.",
   "Fallasgon, Charmen Joy G.",
   "Fernandez, Rudy R.",
+  "Heraldo, Charmaine Mechelle",
   "Hermoso, Zenaida R.",
   "Maglalang, Jose Philip G.",
   "Mulbog, Rhozen Z.",
