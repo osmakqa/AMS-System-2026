@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Prescription, UserRole, PrescriptionStatus, DrugType, ActionType, RequestFinding, PreviousAntibiotic, Organism } from '../types';
-import { IDS_SPECIALISTS } from '../constants'; 
+import { IDS_SPECIALISTS, DETAILED_SYSTEM_SITE_OPTIONS } from '../constants'; 
 import { PEDIATRIC_MONOGRAPHS } from '../data/pediatricMonographs';
 import { verifyPediatricDosing } from '../services/geminiService';
 
@@ -318,7 +318,8 @@ const DetailModal: React.FC<DetailModalProps> = ({ isOpen, onClose, item, role, 
   const getFullSystemSite = () => {
       if (!item.system_site) return '-';
       if (item.system_site === 'OTHERS (SPECIFY)') return item.system_site_other || 'Others';
-      return item.system_site;
+      const found = DETAILED_SYSTEM_SITE_OPTIONS.find(opt => opt.code === item.system_site);
+      return found ? `${item.system_site} - ${found.description}` : item.system_site;
   };
 
   return (

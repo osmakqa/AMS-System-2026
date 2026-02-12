@@ -23,6 +23,7 @@ const CLINICAL_DEPARTMENTS = [
   "Anesthesiology",
   "Obstetrics and Gynecology",
   "Ophthalmology",
+  "Otorhinolaryngology - Head and Neck Surgery",
   "Physical and Rehabilitation Medicine"
 ];
 
@@ -34,6 +35,7 @@ const DETAILED_SYSTEM_SITE_OPTIONS = [
   { code: "ENT", description: "Therapy for Ear, Nose, Throat infections including mouth, sinuses, larynx" },
   { code: "AOM", description: "Acute otitis media" },
   { code: "LUNG", description: "Lung abscess including aspergilloma" },
+  { code: "Proph RESP", description: "Pulmonary surgery, prophylaxis for respiratory pathogens (e.g., aspergillosis)" },
   { code: "URTI", description: "Upper respiratory tract viral infections (including influenza but not ENT)" },
   { code: "Bron", description: "Acute bronchitis or exacerbations of chronic bronchitis" },
   { code: "Pneu", description: "Pneumonia or LRTI (lower respiratory tract infections)" },
@@ -43,14 +45,17 @@ const DETAILED_SYSTEM_SITE_OPTIONS = [
   { code: "CVS", description: "Cardiovascular system infections: endocarditis, endovascular device infection (e.g., pacemaker, vascular graft)" },
   { code: "Proph CVS", description: "Cardiac or vascular surgery prophylaxis; endocarditis prophylaxis" },
   { code: "GI", description: "Gastrointestinal infections (salmononellosis, Campylobacter, parasitic infections)" },
+  { code: "Proph GI", description: "Gastrointestinal tract surgery, liver/biliary tree procedures; GI prophylaxis in neutropenic patients or hepatic failure" },
   { code: "IA", description: "Intra-abdominal sepsis including hepatobiliary and intra-abdominal abscess" },
   { code: "CDIF", description: "Clostridioides difficile infection" },
   { code: "SST", description: "Skin and soft tissue infections: cellulitis, surgical site infection, deep soft tissue infection not involving bone (e.g., infected pressure ulcer, diabetic ulcer, abscess)" },
   { code: "BJ", description: "Bone/Joint infections: septic arthritis (including prosthetic joint), osteomyelitis" },
   { code: "Cys", description: "Lower urinary tract infection (UTI): cystitis" },
+  { code: "Proph UTI", description: "Prophylaxis for urological surgery (SP) or recurrent urinary tract infection (MP)" },
   { code: "Pye", description: "Upper UTI including catheter-related UTI, pyelonephritis" },
   { code: "ASB", description: "Asymptomatic bacteriuria" },
   { code: "OBGY", description: "Obstetric/gynecological infections, sexually transmitted diseases (STD) in women" },
+  { code: "Proph OBGY", description: "Prophylaxis for obstetric or gynecological surgery (SP: caesarean section, no episiotomy; MP: carriage of group B streptococcus)" },
   { code: "GUM", description: "Genito-urinary males + prostatitis, epididymo-orchitis, STD in men" },
   { code: "BAC", description: "Bacteraemia or fungaemia with no clear anatomic site and no shock" },
   { code: "SEPSIS", description: "Sepsis of any origin (e.g., urosepsis, pulmonary sepsis), sepsis syndrome or septic shock with no clear anatomic site; includes fungaemia (candidemia) with septic symptoms" },
@@ -62,6 +67,7 @@ const DETAILED_SYSTEM_SITE_OPTIONS = [
   { code: "LYMPH", description: "Lymphatics as the primary source of infection (e.g., suppurative lymphadenitis)" },
   { code: "Sys-DI", description: "Disseminated infection (viral infections such as measles, CMV, etc.)" },
   { code: "Other", description: "Antimicrobial prescribed with documentation but no defined diagnosis group" },
+  { code: "MP-GEN", description: "Medical prophylaxis in general without targeting a specific site (e.g., antifungal prophylaxis during immunosuppression)" },
   { code: "UNK", description: "Completely unknown indication" },
   { code: "CLD", description: "Chronic lung disease: long-term respiratory problems in premature babies (bronchopulmonary dysplasia)" },
   { code: "OTHERS (SPECIFY)", description: "Clinical site or infection type not listed above" }
@@ -968,9 +974,17 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                              <div className="flex flex-col gap-2">
                                 <div className="flex items-center gap-2">
                                     <Input id="scr_mgdl" error={!!validationErrors.scr_mgdl} type="number" name="scr_mgdl" value={formData.scr_mgdl} onChange={handleChange} disabled={scrNotAvailable} className="flex-1" />
-                                    <label className="flex items-center gap-1.5 cursor-pointer whitespace-nowrap"><input type="checkbox" checked={scrNotAvailable} onChange={e => setScrNotAvailable(e.target.checked)} className="rounded border-gray-300 text-green-600" /><span className="text-[10px] font-bold text-gray-400 uppercase">Pending</span></label>
+                                    <div className="flex items-center gap-3">
+                                        <label className="flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
+                                            <input type="checkbox" checked={scrNotAvailable} onChange={e => setScrNotAvailable(e.target.checked)} className="rounded border-gray-300 text-green-600 h-4 w-4" />
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase">Pending</span>
+                                        </label>
+                                        <label className="flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
+                                            <input type="checkbox" name="is_esrd" checked={formData.is_esrd} onChange={handleChange} className="rounded border-gray-300 text-red-600 h-4 w-4" />
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase">ESRD</span>
+                                        </label>
+                                    </div>
                                 </div>
-                                <label className="flex items-center gap-1.5 cursor-pointer whitespace-nowrap ml-1"><input type="checkbox" name="is_esrd" checked={formData.is_esrd} onChange={handleChange} className="rounded border-gray-300 text-red-600" /><span className="text-[10px] font-bold text-gray-400 uppercase">ESRD</span></label>
                              </div>
                         </FormGroup>
                         {!scrNotAvailable && formData.scr_mgdl && (

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DrugType, PrescriptionStatus, UserRole, PreviousAntibiotic, Organism, Susceptibility } from '../types';
-import { IDS_SPECIALISTS_ADULT, IDS_SPECIALISTS_PEDIATRIC, WARDS, LOGO_URL } from '../constants';
+import { IDS_SPECIALISTS_ADULT, IDS_SPECIALISTS_PEDIATRIC, WARDS, LOGO_URL, DETAILED_SYSTEM_SITE_OPTIONS } from '../constants';
 import { ADULT_MONOGRAPHS } from '../data/adultMonographs';
 import { PEDIATRIC_MONOGRAPHS } from '../data/pediatricMonographs';
 import { checkRenalDosing, verifyPediatricDosing } from '../services/geminiService';
@@ -23,57 +23,8 @@ const CLINICAL_DEPARTMENTS = [
   "Anesthesiology",
   "Obstetrics and Gynecology",
   "Ophthalmology",
+  "Otorhinolaryngology - Head and Neck Surgery",
   "Physical and Rehabilitation Medicine"
-];
-
-const DETAILED_SYSTEM_SITE_OPTIONS = [
-  { code: "CNS", description: "Infections of the Central Nervous System" },
-  { code: "Proph CNS", description: "Prophylaxis for CNS (neurosurgery, meningococcal)" },
-  { code: "EYE", description: "Therapy for Eye infections (e.g., endophthalmitis)" },
-  { code: "Proph EYE", description: "Prophylaxis for Eye operations" },
-  { code: "ENT", description: "Therapy for Ear, Nose, Throat infections including mouth, sinuses, larynx" },
-  { code: "AOM", description: "Acute otitis media" },
-  { code: "LUNG", description: "Lung abscess including aspergilloma" },
-  { code: "Proph RESP", description: "Pulmonary surgery, prophylaxis for respiratory pathogens" },
-  { code: "URTI", description: "Upper respiratory tract viral infections" },
-  { code: "Bron", description: "Acute bronchitis or exacerbations of chronic bronchitis" },
-  { code: "Pneu", description: "Pneumonia or LRTI (lower respiratory tract infections)" },
-  { code: "COVID-19", description: "Coronavirus disease caused by SARS-CoV-2 infection" },
-  { code: "TB", description: "Pulmonary tuberculosis" },
-  { code: "CF", description: "Cystic fibrosis" },
-  { code: "CVS", description: "Cardiovascular system infections: endocarditis, device infection" },
-  { code: "Proph CVS", description: "Cardiac or vascular surgery prophylaxis; endocarditis prophylaxis" },
-  { code: "GI", description: "Gastrointestinal infections (salmononellosis, Campylobacter, parasitic)" },
-  { code: "Proph GI", description: "Gastrointestinal tract surgery, liver/biliary tree procedures" },
-  { code: "IA", description: "Intra-abdominal sepsis including hepatobiliary and abscess" },
-  { code: "CDIF", description: "Clostridioides difficile infection" },
-  { code: "SST", description: "Skin and soft tissue infections: cellulitis, surgical site, abscess" },
-  { code: "Proph BJ", description: "Prophylaxis for Skin & Soft Tissue, plastic or orthopedic surgery" },
-  { code: "BJ", description: "Bone/Joint infections: septic arthritis, osteomyelitis" },
-  { code: "Cys", description: "Lower urinary tract infection (UTI): cystitis" },
-  { code: "Proph UTI", description: "Prophylaxis for urological surgery or recurrent UTI" },
-  { code: "Pye", description: "Upper UTI including catheter-related UTI, pyelonephritis" },
-  { code: "ASB", description: "Asymptomatic bacteriuria" },
-  { code: "OBGY", description: "Obstetric/gynecological infections, STD in women" },
-  { code: "Proph OBGY", description: "Prophylaxis for obstetric or gynecological surgery" },
-  { code: "GUM", description: "Genito-urinary males + prostatitis, epididymo-orchitis, STD in men" },
-  { code: "BAC", description: "Bacteraemia or fungaemia with no clear anatomic site and no shock" },
-  { code: "SEPSIS", description: "Sepsis of any origin, syndrome or septic shock with no clear anatomic site" },
-  { code: "Malaria", description: "Malaria" },
-  { code: "HIV", description: "Human immunodeficiency virus" },
-  { code: "PUO", description: "Pyrexia of Unknown Origin; fever syndrome without identified source" },
-  { code: "PUO-HO", description: "Fever syndrome in non-neutropenic hemato-oncology patients" },
-  { code: "FN", description: "Fever in the neutropenic patient" },
-  { code: "LYMPH", description: "Lymphatics as the primary source of infection" },
-  { code: "Sys-DI", description: "Disseminated infection (viral infections such as measles, CMV, etc.)" },
-  { code: "Other", description: "Antimicrobial prescribed with documentation but no defined diagnosis group" },
-  { code: "MP-GEN", description: "Medical prophylaxis in general without targeting a specific site" },
-  { code: "UNK", description: "Completely unknown indication" },
-  { code: "PROK", description: "Antimicrobial (e.g., erythromycin) prescribed for prokinetic use" },
-  { code: "MP-MAT", description: "Medical prophylaxis for maternal risk factors (e.g., PROM)" },
-  { code: "NEO-MP", description: "Medical prophylaxis for newborn risk factors (e.g., VLBW, IUGR)" },
-  { code: "CLD", description: "Chronic lung disease (bronchopulmonary dysplasia)" },
-  { code: "OTHERS (SPECIFY)", description: "Clinical site or infection type not listed above" }
 ];
 
 const INDICATION_TYPE_INFO: Record<string, { definition: string, example: string }> = {
@@ -321,7 +272,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     patient_name: '', hospital_number: '', patient_dob: '', age: '', sex: '', weight_kg: '', height_cm: '', ward: '',
     mode: 'adult' as 'adult' | 'pediatric',
     diagnosis: '', system_site: '', system_site_other: '', sgpt: '', scr_mgdl: '', scr_date: '', egfr_text: '',
-    is_esrd: false,
+    is_esrd: false, // Internal state for ESRD checkbox
     antimicrobial: '', drug_type: DrugType.MONITORED as DrugType, dose: '', frequency: '', duration: '',
     route: 'IV',
     route_other: '',
