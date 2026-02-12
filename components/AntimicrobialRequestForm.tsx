@@ -572,8 +572,13 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     const requiredFields: (keyof typeof formData)[] = [
       'patient_name', 'age', 'sex', 'weight_kg', 'hospital_number', 'ward', 'diagnosis', 'system_site',
       'antimicrobial', 'dose', 'frequency', 'duration', 'route', 'selectedIndicationType',
-      'resident_name', 'clinical_dept', 'req_date', 'selectedBasisCategory'
+      'resident_name', 'clinical_dept', 'selectedBasisCategory'
     ];
+    
+    // Explicitly require req_date only if not AMS_ADMIN (to preserve original for admin edits)
+    if (role !== UserRole.AMS_ADMIN) {
+      requiredFields.push('req_date');
+    }
 
     requiredFields.forEach(field => {
       if (!formData[field] || String(formData[field]).trim() === '') {
@@ -807,7 +812,12 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                 <section className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
                     <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2">Patient Profile</h4>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <FormGroup label="Request Date" error={validationErrors.req_date}><Input id="req_date" error={!!validationErrors.req_date} type="date" name="req_date" value={formData.req_date} onChange={handleChange} /></FormGroup>
+                        {/* Hide Request Date field for AMS admins to keep original date/time */}
+                        {role !== UserRole.AMS_ADMIN && (
+                          <FormGroup label="Request Date" error={validationErrors.req_date}>
+                            <Input id="req_date" error={!!validationErrors.req_date} type="date" name="req_date" value={formData.req_date} onChange={handleChange} />
+                          </FormGroup>
+                        )}
                         <FormGroup label="Full Name (Last, First)" className="md:col-span-2" error={validationErrors.patient_name}><Input id="patient_name" error={!!validationErrors.patient_name} name="patient_name" value={formData.patient_name} onChange={handleChange} placeholder="e.g. Dela Cruz, Juan" /></FormGroup>
                         <FormGroup label="Hospital Number" error={validationErrors.hospital_number}><Input id="hospital_number" error={!!validationErrors.hospital_number} name="hospital_number" value={formData.hospital_number} onChange={handleChange} placeholder="ID Number" /></FormGroup>
                         {patientMode === 'pediatric' ? (

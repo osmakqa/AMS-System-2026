@@ -371,6 +371,7 @@ function App() {
               newStatus = null; 
 
               // 2. Strict Whitelist of Clinical/Patient fields to ensure "No Trace" of metadata changes
+              // Explicitly removed: req_date, created_at, timestamp, dispensed_date, ids_approved_at, ids_disapproved_at
               const fieldsToKeep = [
                   'patient_name', 'hospital_number', 'patient_dob', 'ward', 'age', 'sex', 
                   'weight_kg', 'height_cm', 'mode', 'diagnosis', 'system_site', 
