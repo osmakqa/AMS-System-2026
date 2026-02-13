@@ -30,6 +30,9 @@ const PrescriptionCard: React.FC<PrescriptionCardProps> = ({ item, onAction, onV
     }
   };
 
+  // Prioritize created_at to match the Lifecycle Tracker in DetailModal
+  const requestDateTime = item.created_at || item.req_date;
+
   return (
     <div 
       className={`bg-white/70 backdrop-blur-md rounded-xl shadow-lg border border-white/30 border-l-4 ${cardBorderColor} p-5 relative transition-all duration-300 ease-in-out hover:shadow-2xl hover:-translate-y-1.5 cursor-pointer flex flex-col overflow-hidden`}
@@ -47,10 +50,10 @@ const PrescriptionCard: React.FC<PrescriptionCardProps> = ({ item, onAction, onV
             </div>
         </div>
         <div className="text-right">
-            <div className="text-xs font-medium text-gray-500">{item.req_date ? new Date(item.req_date).toLocaleDateString() : 'No Date'}</div>
-            {item.created_at && (
+            <div className="text-xs font-medium text-gray-500">{requestDateTime ? new Date(requestDateTime).toLocaleDateString() : 'No Date'}</div>
+            {requestDateTime && (
                 <div className="text-[10px] font-black text-gray-400 uppercase tracking-tight mt-0.5">
-                    {formatTime(item.created_at)}
+                    {formatTime(requestDateTime)}
                 </div>
             )}
         </div>
