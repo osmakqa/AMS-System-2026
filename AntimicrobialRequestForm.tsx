@@ -361,6 +361,32 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     }
   };
 
+  const handleClearAll = () => {
+    if (!window.confirm("Are you sure you want to clear all entries? This action cannot be undone.")) return;
+    setFormData({
+      req_date: getTodayDate(),
+      patient_name: '', hospital_number: '', patient_dob: '', age: '', sex: '', weight_kg: '', height_cm: '', ward: '',
+      mode: 'adult' as 'adult' | 'pediatric',
+      diagnosis: '', system_site: '', system_site_other: '', sgpt: '', scr_mgdl: '', scr_date: '', egfr_text: '',
+      is_esrd: false,
+      antimicrobial: '', drug_type: DrugType.MONITORED as DrugType, dose: '', frequency: '', duration: '',
+      route: 'IV',
+      route_other: '',
+      indication: '', 
+      basis_indication: '',
+      selectedBasisCategory: '',
+      basis_indication_details: '',
+      selectedIndicationType: '' as 'Empiric' | 'Prophylactic' | 'Therapeutic' | '',
+      specimen: '',
+      resident_name: '', clinical_dept: '', service_resident_name: '', id_specialist: '',
+    });
+    setPrevAbxRows([{ id: 0, drug: '', frequency: '', duration: '' }]);
+    setOrganismBlocks([{ id: 0, name: '', susceptibilities: [{ drug: '', result: '' }] }]);
+    setScrNotAvailable(false);
+    setValidationErrors({});
+    setRenalAnalysis(null);
+  };
+
   useEffect(() => {
     if (initialData) {
       // Parse basis_indication if possible
@@ -970,7 +996,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                         </FormGroup>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
-                        <FormGroup label="Serum Creatinine (µmol/L)" error={validationErrors.scr_mgdl}>
+                        <FormGroup label="Serum Creatinine (µmol/L)" className="md:col-span-2" error={validationErrors.scr_mgdl}>
                              <div className="flex flex-col gap-2">
                                 <div className="flex items-center gap-2">
                                     <Input id="scr_mgdl" error={!!validationErrors.scr_mgdl} type="number" name="scr_mgdl" value={formData.scr_mgdl} onChange={handleChange} disabled={scrNotAvailable} className="flex-1" />
@@ -1095,6 +1121,10 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
 
         {/* Footer */}
         <footer className="p-4 bg-white border-t border-gray-100 flex justify-end gap-3 shrink-0 px-8">
+            <button type="button" onClick={handleClearAll} className="mr-auto px-6 py-2.5 text-red-600 hover:bg-red-50 rounded-xl text-sm font-bold transition-all flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                Clear All
+            </button>
             <button type="button" onClick={onClose} className="px-6 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl text-sm font-bold transition-all">Cancel</button>
             <button type="button" onClick={openReview} disabled={loading} className="px-10 py-2.5 bg-[#009a3e] text-white rounded-xl text-sm font-bold shadow-lg hover:shadow-green-200 transition-all flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
