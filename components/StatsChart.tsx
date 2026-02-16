@@ -107,6 +107,7 @@ const Top5List = ({ title, data, color, icon, onClick }: { title: string, data: 
 const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], monitoringData = [], role, selectedMonth, onMonthChange, selectedYear, onYearChange }) => {
   const [activeTab, setActiveTab] = useState('General');
   const [modeFilter, setModeFilter] = useState<'All' | 'adult' | 'pediatric'>('All');
+  const [generalDrugFilter, setGeneralDrugFilter] = useState<'All' | 'Monitored' | 'Restricted'>('All');
   const [modalConfig, setModalConfig] = useState<{ isOpen: boolean; data: Prescription[]; title: string }>({ isOpen: false, data: [], title: '' });
   const [aiOthersData, setAiOthersData] = useState<{ name: string, value: number }[]>([]);
   const [isAnalyzingOthers, setIsAnalyzingOthers] = useState(false);
@@ -126,8 +127,9 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
 
   const processedData = useMemo(() => {
     const source = modeFilteredData;
-    const approved = source.filter(i => i.status === PrescriptionStatus.APPROVED);
-    const disapproved = source.filter(i => i.status === PrescriptionStatus.DISAPPROVED);
+    const generalSource = generalDrugFilter === 'All' ? source : source.filter(d => d.drug_type === generalDrugFilter);
+    const approved = generalSource.filter(i => i.status === PrescriptionStatus.APPROVED);
+    const disapproved = generalSource.filter(i => i.status === PrescriptionStatus.DISAPPROVED);
     const throughput = approved.length + disapproved.length;
     const approvalRate = throughput > 0 ? (approved.length / throughput * 100).toFixed(1) + '%' : '0%';
     
@@ -141,17 +143,16 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
         return Object.entries(counts).map(([name, value]) => ({ name, value })).sort((a,b) => b.value - a.value);
     };
 
-    const getStats = (items: Prescription[]) => {
-      const total = items.length;
-      const app = items.filter(i => i.status === PrescriptionStatus.APPROVED).length;
-      const dis = items.filter(i => i.status === PrescriptionStatus.DISAPPROVED).length;
-      const activeThroughput = app + dis;
-      const rate = activeThroughput > 0 ? (app / activeThroughput * 100).toFixed(1) + '%' : '0%';
-      return { total, app, dis, activeThroughput, rate };
+    const getOthersBreakdown = (items: Prescription[]) => {
+        const counts: Record<string, number> = {};
+        items.forEach(item => {
+            item.findings?.filter(f => f.category === 'Others').forEach(f => {
+                const detail = f.details.trim() || 'No Details Provided';
+                counts[detail] = (counts[detail] || 0) + 1;
+            });
+        });
+        return Object.entries(counts).map(([name, value]) => ({ name, value })).sort((a,b) => b.value - a.value).slice(0, 15);
     };
-
-    const resItems = source.filter(d => d.drug_type === DrugType.RESTRICTED);
-    const monItems = source.filter(d => d.drug_type === DrugType.MONITORED);
 
     const idsConsults = source.filter(i => i.ids_approved_at || i.ids_disapproved_at);
     const idsApprovedCount = idsConsults.filter(i => i.status === PrescriptionStatus.APPROVED).length;
@@ -168,40 +169,26 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
 
     return {
       general: {
-        totalRequests: source.length,
+        totalRequests: generalSource.length,
         totalDisapproved: disapproved.length,
         totalApproved: approved.length,
         approvalRate,
         topAntimicrobials: getTopN(approved.map(i => i.antimicrobial), 5),
         topDepartments: getTopN(approved.map(i => i.clinical_dept), 5),
         topWards: getTopN(approved.map(i => i.ward), 5),
-        deptCensus: getCensus(source.map(i => i.clinical_dept)),
-        wardCensus: getCensus(source.map(i => i.ward)),
+        deptCensus: getCensus(generalSource.map(i => i.clinical_dept)),
+        wardCensus: getCensus(generalSource.map(i => i.ward)),
         indicationData: getTopN(approved.map(i => i.indication), 5),
         systemSiteData: getTopN(approved.map(i => i.system_site === 'OTHERS (SPECIFY)' ? i.system_site_other : i.system_site), 15),
-      },
-      restricted: {
-        stats: getStats(resItems),
-        census: getCensus(resItems.map(d => d.antimicrobial)),
-        topDrugs: getTopN(approved.filter(d => d.drug_type === DrugType.RESTRICTED).map(d => d.antimicrobial), 5),
-        topDepts: getTopN(approved.filter(d => d.drug_type === DrugType.RESTRICTED).map(d => d.clinical_dept), 5),
-        topWards: getTopN(approved.filter(d => d.drug_type === DrugType.RESTRICTED).map(d => d.ward), 5),
-        interventions: getFindingsDistribution(resItems),
-      },
-      monitored: {
-        stats: getStats(monItems),
-        census: getCensus(monItems.map(d => d.antimicrobial)),
-        topDrugs: getTopN(approved.filter(d => d.drug_type === DrugType.MONITORED).map(d => d.antimicrobial), 5),
-        topDepts: getTopN(approved.filter(d => d.drug_type === DrugType.MONITORED).map(d => d.clinical_dept), 5),
-        topWards: getTopN(approved.filter(d => d.drug_type === DrugType.MONITORED).map(d => d.ward), 5),
-        interventions: getFindingsDistribution(monItems),
+        antimicrobialCensus: getCensus(generalSource.map(i => i.antimicrobial)),
+        interventions: getFindingsDistribution(generalSource),
       },
       disapproved: {
-        total: disapproved.length,
-        topDepts: getTopN(disapproved.map(i => i.clinical_dept), 5),
-        topWards: getTopN(disapproved.map(i => i.ward), 5),
-        topDrugs: getTopN(disapproved.map(i => i.antimicrobial), 5),
-        interventions: getFindingsDistribution(disapproved),
+        total: source.filter(i => i.status === PrescriptionStatus.DISAPPROVED).length,
+        topDepts: getTopN(source.filter(i => i.status === PrescriptionStatus.DISAPPROVED).map(i => i.clinical_dept), 5),
+        topWards: getTopN(source.filter(i => i.status === PrescriptionStatus.DISAPPROVED).map(i => i.ward), 5),
+        topDrugs: getTopN(source.filter(i => i.status === PrescriptionStatus.DISAPPROVED).map(i => i.antimicrobial), 5),
+        interventions: getFindingsDistribution(source.filter(i => i.status === PrescriptionStatus.DISAPPROVED)),
       },
       pharmacy: {
         totalActions: source.filter(i => i.dispensed_date).length,
@@ -210,6 +197,7 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
         interventions: getFindingsDistribution(source).slice(0, 10),
         topPharmacists: getTopN(source.map(i => i.dispensed_by), 10),
         otherDetailsList: source.flatMap(i => i.findings?.filter(f => f.category === 'Others').map(f => f.details) || []),
+        othersBreakdown: getOthersBreakdown(source),
       },
       ids: {
         consults: idsConsults.length,
@@ -235,7 +223,7 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
         }, {})).map(([name, val]: any) => ({ name, ...val }))
       }
     };
-  }, [modeFilteredData]);
+  }, [modeFilteredData, generalDrugFilter]);
 
   const handleClusterOthers = async () => {
     if (processedData.pharmacy.otherDetailsList.length === 0) return;
@@ -271,20 +259,37 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
     switch(activeTab) {
       case 'General':
         const g = processedData.general;
-        const approvedData = modeFilteredData.filter(i => i.status === PrescriptionStatus.APPROVED);
+        const generalSource = generalDrugFilter === 'All' ? modeFilteredData : modeFilteredData.filter(d => d.drug_type === generalDrugFilter);
+        const approvedData = generalSource.filter(i => i.status === PrescriptionStatus.APPROVED);
         return (
           <div className="space-y-6 animate-fade-in">
+            {/* General Filter Switcher */}
+            <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between gap-4">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">General View Filter</span>
+                <div className="flex bg-gray-100 p-1 rounded-lg">
+                    {(['All', 'Monitored', 'Restricted'] as const).map(f => (
+                        <button 
+                            key={f} 
+                            onClick={() => setGeneralDrugFilter(f)} 
+                            className={`px-4 py-1.5 text-xs font-black uppercase tracking-widest rounded-md transition-all ${generalDrugFilter === f ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                            {f}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <KpiCard title="Total Requests" value={g.totalRequests} subValue="All status" color="bg-gray-100 text-gray-700" icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>} onClick={() => handleDrillDown('status', 'all_records', modeFilteredData)}/>
-                <KpiCard title="Total Approved" value={g.totalApproved} color="bg-green-100 text-green-700" icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} onClick={() => handleDrillDown('status', 'approved')}/>
-                <KpiCard title="Total Disapproved" value={g.totalDisapproved} color="bg-red-100 text-red-700" icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>} onClick={() => handleDrillDown('status', 'disapproved')}/>
+                <KpiCard title={`Total ${generalDrugFilter === 'All' ? '' : generalDrugFilter} Requests`} value={g.totalRequests} subValue="All status" color="bg-gray-100 text-gray-700" icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>} onClick={() => handleDrillDown('status', 'general_requests', generalSource)}/>
+                <KpiCard title="Total Approved" value={g.totalApproved} color="bg-green-100 text-green-700" icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} onClick={() => handleDrillDown('status', 'approved', generalSource)}/>
+                <KpiCard title="Total Disapproved" value={g.totalDisapproved} color="bg-red-100 text-red-700" icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>} onClick={() => handleDrillDown('status', 'disapproved', generalSource)}/>
                 <KpiCard title="Approval Rate" value={g.approvalRate} color="bg-blue-100 text-blue-700" icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <ChartWrapper title="Department Breakdown (Census)">
                     <ResponsiveContainer>
-                        <BarChart data={g.deptCensus} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('clinical_dept', e.activeLabel)}>
+                        <BarChart data={g.deptCensus} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('clinical_dept', e.activeLabel, generalSource)}>
                             <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                             <XAxis type="number" />
                             <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={110} cursor="pointer" />
@@ -295,7 +300,7 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
                 </ChartWrapper>
                 <ChartWrapper title="Ward Breakdown (Census)">
                     <ResponsiveContainer>
-                        <BarChart data={g.wardCensus} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('ward', e.activeLabel)}>
+                        <BarChart data={g.wardCensus} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('ward', e.activeLabel, generalSource)}>
                             <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                             <XAxis type="number" />
                             <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={110} cursor="pointer" />
@@ -305,6 +310,18 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
                     </ResponsiveContainer>
                 </ChartWrapper>
             </div>
+
+            <ChartWrapper title={`${generalDrugFilter} Antimicrobial Census (All Statuses)`}>
+                <ResponsiveContainer>
+                    <BarChart data={g.antimicrobialCensus} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('antimicrobial', e.activeLabel, generalSource)}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <XAxis type="number" />
+                        <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={110} cursor="pointer" />
+                        <Tooltip />
+                        <Bar dataKey="value" fill="#8b5cf6" radius={[0, 4, 4, 0]} cursor="pointer" />
+                    </BarChart>
+                </ResponsiveContainer>
+            </ChartWrapper>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <ChartWrapper title="Top 5 Antimicrobials (Approved)">
@@ -351,68 +368,21 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
                 </ResponsiveContainer>
             </ChartWrapper>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                 <Top5List title="Top 5 Departments (Approved)" data={g.topDepartments} color="bg-emerald-600" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: approvedData, title: 'Approved Requests by Department'})}/>
-                 <Top5List title="Top 5 Wards (Approved)" data={g.topWards} color="bg-blue-600" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: approvedData, title: 'Approved Requests by Ward'})}/>
-            </div>
-          </div>
-        );
-
-      case 'Restricted':
-      case 'Monitored':
-        const typeKey = activeTab.toLowerCase() as 'restricted' | 'monitored';
-        const t = processedData[typeKey];
-        const typeSource = modeFilteredData.filter(i => i.drug_type.toLowerCase() === typeKey);
-        const typeApproved = typeSource.filter(i => i.status === PrescriptionStatus.APPROVED);
-        return (
-          <div className="space-y-6 animate-fade-in">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <KpiCard title={`Total ${activeTab} Requests`} value={t.stats.total} color="bg-gray-100 text-gray-700" icon={<></>} onClick={() => handleDrillDown('drug_type', activeTab, modeFilteredData)}/>
-                <KpiCard title={`Total Approved ${activeTab}`} value={t.stats.app} color="bg-green-100 text-green-700" icon={<></>} onClick={() => handleDrillDown('status', 'approved', typeSource)}/>
-                <KpiCard title={`Total Disapproved ${activeTab}`} value={t.stats.dis} color="bg-red-100 text-red-700" icon={<></>} onClick={() => handleDrillDown('status', 'disapproved', typeSource)}/>
-                <KpiCard title="Approval Rate" value={t.stats.rate} color="bg-blue-100 text-blue-700" icon={<></>} />
-            </div>
-
-            <ChartWrapper title={`${activeTab} Antimicrobial Census (Usage Breakdown)`}>
+            <ChartWrapper title="Intervention Findings (All Categories)">
                 <ResponsiveContainer>
-                    <BarChart data={t.census} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('antimicrobial', e.activeLabel, typeSource)}>
+                    <BarChart data={g.interventions} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('finding_category', e.activeLabel, generalSource)}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                         <XAxis type="number" />
-                        <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={110} cursor="pointer" />
+                        <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={110} cursor="pointer" />
                         <Tooltip />
-                        <Bar dataKey="value" fill="#8b5cf6" radius={[0, 4, 4, 0]} cursor="pointer" />
+                        <Bar dataKey="value" fill="#ef4444" radius={[0, 4, 4, 0]} cursor="pointer" />
                     </BarChart>
                 </ResponsiveContainer>
             </ChartWrapper>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <ChartWrapper title={`Top 5 ${activeTab} Drugs (Approved)`}>
-                    <ResponsiveContainer>
-                        <BarChart data={t.topDrugs} layout="vertical" margin={{ left: 100 }} onClick={(e) => e && e.activeLabel && handleDrillDown('antimicrobial', e.activeLabel, typeApproved)}>
-                            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                            <XAxis type="number" />
-                            <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={100} cursor="pointer" />
-                            <Tooltip />
-                            <Bar dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} cursor="pointer" />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </ChartWrapper>
-                <ChartWrapper title="Intervention Findings">
-                    <ResponsiveContainer>
-                        <BarChart data={t.interventions} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('finding_category', e.activeLabel, typeSource)}>
-                            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                            <XAxis type="number" />
-                            <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={110} cursor="pointer" />
-                            <Tooltip />
-                            <Bar dataKey="value" fill="#ef4444" radius={[0, 4, 4, 0]} cursor="pointer" />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </ChartWrapper>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Top5List title="Top 5 Departments" data={t.topDepts} color="bg-indigo-500" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: typeApproved, title: `Top 5 ${activeTab} Depts`})}/>
-                <Top5List title="Top 5 Wards" data={t.topWards} color="bg-teal-500" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: typeApproved, title: `Top 5 ${activeTab} Wards`})}/>
+                 <Top5List title="Top 5 Departments (Approved)" data={g.topDepartments} color="bg-emerald-600" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: approvedData, title: 'Approved Requests by Department'})}/>
+                 <Top5List title="Top 5 Wards (Approved)" data={g.topWards} color="bg-blue-600" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: approvedData, title: 'Approved Requests by Ward'})}/>
             </div>
           </div>
         );
@@ -422,7 +392,8 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
         const disapprovedData = modeFilteredData.filter(i => i.status === PrescriptionStatus.DISAPPROVED);
         return (
           <div className="space-y-6 animate-fade-in">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <KpiCard title="Total Disapproved" value={d.total} color="bg-red-100 text-red-700" icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>} onClick={() => handleDrillDown('status', 'disapproved')}/>
                 <Top5List title="Top 5 Departments" data={d.topDepts} color="bg-red-600" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: disapprovedData, title: 'Disapproved by Dept'})}/>
                 <Top5List title="Top 5 Wards" data={d.topWards} color="bg-red-500" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: disapprovedData, title: 'Disapproved by Ward'})}/>
                 <Top5List title="Top 5 Antimicrobials" data={d.topDrugs} color="bg-red-400" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: disapprovedData, title: 'Disapproved by Drug'})}/>
@@ -479,6 +450,18 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
                         <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fontWeight: 'bold' }} width={140} cursor="pointer" />
                         <Tooltip />
                         <Bar dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} cursor="pointer" />
+                    </BarChart>
+                </ResponsiveContainer>
+            </ChartWrapper>
+
+            <ChartWrapper title="Breakdown of 'Others' Intervention Details" heightClass="h-[600px]">
+                <ResponsiveContainer>
+                    <BarChart data={p.othersBreakdown} layout="vertical" margin={{ left: 180 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <XAxis type="number" />
+                        <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={170} />
+                        <Tooltip />
+                        <Bar dataKey="value" fill="#f59e0b" radius={[0, 4, 4, 0]} />
                     </BarChart>
                 </ResponsiveContainer>
             </ChartWrapper>
@@ -540,7 +523,7 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
   };
 
   const availableTabs = useMemo(() => {
-    const base = ['General', 'Restricted', 'Monitored', 'Disapproved', 'Pharmacy', 'IDS'];
+    const base = ['General', 'Disapproved', 'Pharmacy', 'IDS'];
     if (role === 'AMS_ADMIN') return [...base, 'Audits', 'AMS Monitoring'];
     return base;
   }, [role]);
