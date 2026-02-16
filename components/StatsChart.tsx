@@ -1,5 +1,4 @@
-
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
   PieChart, Pie, Cell
@@ -21,23 +20,6 @@ interface StatsChartProps {
   onYearChange: (year: number) => void;
 }
 
-// Helper to normalize and match IDS names, handling common spelling variations
-const isIdsNameMatch = (name1: string | undefined | null, name2: string | undefined | null) => {
-    if (!name1 || !name2) return false;
-    const clean1 = name1.toLowerCase().trim();
-    const clean2 = name2.toLowerCase().trim();
-    if (clean1 === clean2) return true;
-
-    // Specific legacy mapping for Dr. Tibayan (Christopher vs Christoper)
-    const tibayanVariants = ["dr. christopher john tibayan", "dr. christoper john tibayan"];
-    if (tibayanVariants.includes(clean1) && tibayanVariants.includes(clean2)) {
-        return true;
-    }
-
-    return false;
-};
-
-// Canonical name for Tibayan for stats aggregation
 const getCanonicalIdsName = (name: string | undefined | null) => {
     if (!name) return name;
     const clean = name.toLowerCase().trim();
@@ -46,7 +28,6 @@ const getCanonicalIdsName = (name: string | undefined | null) => {
     return name;
 };
 
-// --- Data Processing Helpers ---
 const getTopN = (items: (string | undefined)[], n: number, useCanonicalIds: boolean = false) => {
   const counts = new Map<string, number>();
   items.forEach(item => { 
@@ -58,28 +39,37 @@ const getTopN = (items: (string | undefined)[], n: number, useCanonicalIds: bool
   return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, n).map(([name, value]) => ({ name, value }));
 };
 
-const formatDuration = (ms: number) => {
-  if (isNaN(ms) || ms <= 0) return 'N/A';
-  const hours = ms / (1000 * 60 * 60);
-  if (hours < 1) return `${(hours * 60).toFixed(0)} min`;
-  if (hours < 48) return `${hours.toFixed(1)} hrs`;
-  return `${(hours / 24).toFixed(1)} days`;
+const getCensus = (items: (string | undefined)[], useCanonicalIds: boolean = false) => {
+  const counts = new Map<string, number>();
+  items.forEach(item => { 
+      if (item) { 
+          const nameToUse = useCanonicalIds ? getCanonicalIdsName(item) : item;
+          if (nameToUse) counts.set(nameToUse, (counts.get(nameToUse) || 0) + 1); 
+      } 
+  });
+  return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
 };
 
-const normalizeLogEntry = (entry: string | AdminLogEntry | null): AdminLogEntry | null => {
-    if (!entry) return null;
-    if (typeof entry === 'string') return { time: entry, status: 'Given' };
-    return entry;
+const renderCustomizedPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, value, name }: any) => {
+    const RADIAN = Math.PI / 180;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+    if (percent < 0.05) return null;
+    return (
+        <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" className="text-[10px] font-black">
+            {`${(percent * 100).toFixed(0)}%`}
+        </text>
+    );
 };
 
-// --- Reusable UI Components ---
 const ChartWrapper = ({ title, children, onClick, icon, heightClass = "h-[400px]" }: { title: string, children?: React.ReactNode, onClick?: () => void, icon?: React.ReactNode, heightClass?: string }) => (
   <div 
     className={`bg-white p-6 rounded-xl shadow-lg border border-gray-200 ${heightClass} flex flex-col transition-all duration-300 ${onClick ? 'cursor-pointer hover:shadow-2xl hover:border-green-300 hover:-translate-y-1' : ''}`}
     onClick={onClick}
   >
     <div className="flex justify-between items-center mb-4">
-      <h3 className="text-md font-bold text-gray-800">{title}</h3>
+      <h3 className="text-md font-bold text-gray-800 uppercase tracking-tight">{title}</h3>
       {icon}
     </div>
     <div className="flex-grow w-full h-full">{children}</div>
@@ -91,7 +81,7 @@ const KpiCard = ({ title, value, subValue, icon, color, onClick }: { title: stri
     <div className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center ${color}`}>{icon}</div>
     <div className="overflow-hidden">
       <p className="text-2xl font-bold text-gray-800 truncate">{value}</p>
-      <p className="text-sm text-gray-500 font-medium">{title}</p>
+      <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{title}</p>
       {subValue && <p className="text-xs text-gray-400 mt-1">{subValue}</p>}
     </div>
   </div>
@@ -101,890 +91,494 @@ const Top5List = ({ title, data, color, icon, onClick }: { title: string, data: 
     <div className={`bg-white p-6 rounded-xl shadow-lg border border-gray-200 h-full flex flex-col transition-all duration-300 ${onClick ? 'cursor-pointer hover:shadow-2xl hover:border-green-300 hover:-translate-y-1' : ''}`} onClick={onClick}>
         <div className="flex items-center gap-3 mb-4">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${color}`}>{icon}</div>
-            <h3 className="text-md font-bold text-gray-800">{title}</h3>
+            <h3 className="text-sm font-bold text-gray-800 uppercase tracking-tight">{title}</h3>
         </div>
         <div className="space-y-3">
             {data.length > 0 ? data.map((item, index) => (
-                <div key={index} className="flex justify-between items-center bg-gray-50 p-2 rounded-md">
-                    <span className="text-sm font-medium text-gray-700 truncate">{index + 1}. {item.name}</span>
-                    <span className={`text-sm font-bold text-white px-2 py-0.5 rounded-full ${color}`}>{item.value}</span>
+                <div key={index} className="flex justify-between items-center bg-gray-50 p-2 rounded-md cursor-pointer hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); onClick?.(); }}>
+                    <span className="text-xs font-medium text-gray-700 truncate">{index + 1}. {item.name}</span>
+                    <span className={`text-xs font-bold text-white px-2 py-0.5 rounded-full ${color}`}>{item.value}</span>
                 </div>
-            )) : <NoDataDisplay />}
+            )) : <div className="text-center py-4 text-gray-400 text-xs italic">No data</div>}
         </div>
     </div>
 );
 
-const NoDataDisplay = () => <div className="flex items-center justify-center h-full text-gray-400">No data for this period.</div>;
-
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-gray-900 text-white p-3 rounded-lg shadow-xl border border-gray-700 text-sm"><p className="font-bold mb-1">{label}</p>
-        {payload.map((entry: any, index: number) => (<div key={index} className="flex items-center gap-2"><div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></div><span>{`${entry.name}: ${entry.value}`}</span></div>))}
-      </div>);
-  }
-  return null;
-};
-
-const FilterControls = ({ selectedMonth, onMonthChange, selectedYear, onYearChange }: any) => {
-  const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  const currentYear = new Date().getFullYear();
-  const years = Array.from({length: 5}, (_, i) => currentYear - i);
-
-  return (
-    <div className="flex flex-col sm:flex-row gap-4 items-center">
-      <div className="flex items-center gap-2">
-        <label className="text-xs font-semibold text-gray-500 uppercase">Month:</label>
-        <select 
-          value={selectedMonth} 
-          onChange={(e) => onMonthChange(parseInt(e.target.value))} 
-          className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none shadow-sm transition-colors hover:border-gray-400 [color-scheme:light]"
-        >
-          <option value={-1}>All Months</option>
-          {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
-        </select>
-      </div>
-      <div className="flex items-center gap-2">
-        <label className="text-xs font-semibold text-gray-500 uppercase">Year:</label>
-        <select 
-          value={selectedYear} 
-          onChange={(e) => onYearChange(parseInt(e.target.value))} 
-          className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none shadow-sm transition-colors hover:border-gray-400 [color-scheme:light]"
-        >
-          <option value={0}>All Years</option>
-          {years.map((y) => <option key={y} value={y}>{y}</option>)}
-        </select>
-      </div>
-    </div>
-  );
-};
-
-
-// --- Main Component ---
 const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], monitoringData = [], role, selectedMonth, onMonthChange, selectedYear, onYearChange }) => {
   const [activeTab, setActiveTab] = useState('General');
   const [modeFilter, setModeFilter] = useState<'All' | 'adult' | 'pediatric'>('All');
   const [modalConfig, setModalConfig] = useState<{ isOpen: boolean; data: Prescription[]; title: string }>({ isOpen: false, data: [], title: '' });
-  
-  // AI-Grouping State
   const [aiOthersData, setAiOthersData] = useState<{ name: string, value: number }[]>([]);
   const [isAnalyzingOthers, setIsAnalyzingOthers] = useState(false);
 
-  const handleModalClose = () => setModalConfig({ isOpen: false, data: [], title: '' });
-  
-  const filteredMonitoringData = useMemo(() => {
-    return monitoringData.filter(item => {
-        const d = item.created_at ? new Date(item.created_at) : new Date();
-        const mMatch = selectedMonth === -1 || d.getMonth() === selectedMonth;
-        const yMatch = selectedYear === 0 || d.getFullYear() === selectedYear;
-        return mMatch && yMatch;
-    });
-  }, [monitoringData, selectedMonth, selectedYear]);
-
-  const processedMonitoring = useMemo(() => {
-    const activePatients = filteredMonitoringData.filter(p => p.status === 'Admitted');
-    const allTherapies = filteredMonitoringData.flatMap(p => p.antimicrobials || []);
-    const activeTherapies = allTherapies.filter(t => t.status === 'Active');
-    
-    // Outcomes breakdown
-    const outcomes = [
-        { name: 'Active', value: allTherapies.filter(t => t.status === 'Active').length },
-        { name: 'Completed', value: allTherapies.filter(t => t.status === 'Completed').length },
-        { name: 'Stopped', value: allTherapies.filter(t => t.status === 'Stopped').length },
-        { name: 'Shifted', value: allTherapies.filter(t => t.status === 'Shifted').length },
-    ];
-
-    // Missed dose reason analysis
-    const missedReasonsMap = new Map<string, number>();
-    let totalMissed = 0;
-    allTherapies.forEach(drug => {
-        Object.values(drug.administration_log || {}).forEach((dayDoses: any[]) => {
-            dayDoses.forEach(entry => {
-                const e = normalizeLogEntry(entry);
-                if (e?.status === 'Missed') {
-                    totalMissed++;
-                    const reason = e.reason || 'Not Specified';
-                    missedReasonsMap.set(reason, (missedReasonsMap.get(reason) || 0) + 1);
-                }
-            });
-        });
-    });
-    
-    const missedReasons = Array.from(missedReasonsMap.entries())
-        .map(([name, value]) => ({ name, value }))
-        .sort((a,b) => b.value - a.value);
-
-    // Days on Therapy (DOT) distribution
-    const dotData: number[] = activeTherapies.map(t => {
-        const start = new Date(t.start_date);
-        const diff = Date.now() - start.getTime();
-        return Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-    });
-    const avgDot = dotData.length > 0 ? (dotData.reduce((a,b) => a+b, 0) / dotData.length).toFixed(1) : '0';
-
-    return {
-        activePatients: activePatients.length,
-        totalMissed,
-        completedCount: allTherapies.filter(t => t.status === 'Completed').length,
-        avgDot,
-        outcomes,
-        missedReasons,
-        topMonitoringDrugs: getTopN(allTherapies.map(t => t.drug_name), 5)
-    };
-  }, [filteredMonitoringData]);
+  const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#6366f1'];
 
   const modeFilteredData = useMemo(() => {
-    let filtered = data;
-    
-    // Apply Date Filter
-    filtered = filtered.filter(item => {
+    let filtered = data.filter(item => {
       const d = item.req_date ? new Date(item.req_date) : new Date(item.created_at || Date.now());
       const mMatch = selectedMonth === -1 || d.getMonth() === selectedMonth;
       const yMatch = selectedYear === 0 || d.getFullYear() === selectedYear;
-      return mMatch && yMatch;
+      return mMatch && yMatch && item.status !== PrescriptionStatus.DELETED;
     });
-
-    if (modeFilter === 'All') return filtered;
-    return filtered.filter(d => d.mode === modeFilter);
+    if (modeFilter !== 'All') filtered = filtered.filter(d => d.mode === modeFilter);
+    return filtered;
   }, [data, modeFilter, selectedMonth, selectedYear]);
 
-  // --- Audit Data Processing ---
-  const processedAuditData = useMemo(() => {
-    let audits = auditData;
-    
-    // Filter Audits by Date
-    audits = audits.filter(item => {
-      const d = new Date(item.audit_date);
-      const mMatch = selectedMonth === -1 || d.getMonth() === selectedMonth;
-      const yMatch = selectedYear === 0 || d.getFullYear() === selectedYear;
-      return mMatch && yMatch;
-    });
-
-    // Extract all antimicrobial entries from all filtered audits
-    const allAbxEntries = audits.flatMap(a => (a.antimicrobials || []).map(drug => ({ ...drug, auditor: a.auditor, auditId: a.id })));
-    
-    const totalAudits = audits.length;
-    const totalAbx = allAbxEntries.length;
-
-    // Compliance Metrics
-    const guidelinesYes = allAbxEntries.filter(a => (a as any).guidelinesCompliance === 'Yes').length;
-    const reasonYes = allAbxEntries.filter(a => (a as any).reasonInNote === 'Yes').length;
-    const stopYes = allAbxEntries.filter(a => (a as any).stopReviewDocumented === 'Yes').length;
-
-    const complianceData = [
-        { name: 'Guidelines', value: totalAbx > 0 ? (guidelinesYes / totalAbx) * 100 : 0, count: guidelinesYes },
-        { name: 'Reason in Note', value: totalAbx > 0 ? (reasonYes / totalAbx) * 100 : 0, count: reasonYes },
-        { name: 'Stop/Review', value: totalAbx > 0 ? (stopYes / totalAbx) * 100 : 0, count: stopYes },
-    ];
-
-    // Diagnosis Breakdown
-    const therapeuticCount = allAbxEntries.filter(a => (a as any).diagnosis === 'Therapeutic').length;
-    const prophylacticCount = allAbxEntries.filter(a => (a as any).diagnosis === 'Prophylaxis').length;
-    const diagnosisData = [
-        { name: 'Therapeutic', value: therapeuticCount },
-        { name: 'Prophylactic', value: prophylacticCount },
-        { name: 'Other/Neonatal', value: totalAbx - therapeuticCount - prophylacticCount }
-    ].filter(d => d.value > 0);
-
-    return {
-        totalAudits,
-        totalAbx,
-        complianceData,
-        diagnosisData,
-        topAuditors: getTopN(audits.map(a => a.auditor), 5),
-        topDrugs: getTopN(allAbxEntries.map(a => (a as any).drug), 5),
-        topWards: getTopN(audits.map(a => a.area), 5)
-    };
-  }, [auditData, selectedMonth, selectedYear]);
-
-
-  // --- Data Processing for Prescription Tabs ---
   const processedData = useMemo(() => {
     const source = modeFilteredData;
-    // Subsets
-    const restrictedData = source.filter(d => d.drug_type === DrugType.RESTRICTED);
-    const monitoredData = source.filter(d => d.drug_type === DrugType.MONITORED);
-    
-    // FIX: Filter by dispensed_by for Pharmacists (not requested_by)
-    const pharmacyHandled = source.filter(d => d.dispensed_by && PHARMACISTS.includes(d.dispensed_by)); 
-    
-    // FIX: Filter by id_specialist for IDS (not dispensed_by), using legacy-aware matching
-    const idsHandled = source.filter(d => d.id_specialist && (IDS_SPECIALISTS.includes(getCanonicalIdsName(d.id_specialist) || '') || isIdsNameMatch("Dr. Christoper John Tibayan", d.id_specialist)));
-    
-    // General
-    const approvedItems = source.filter(i => i.status === PrescriptionStatus.APPROVED);
-    const finalizedItems = source.filter(i => i.status === PrescriptionStatus.APPROVED || i.status === PrescriptionStatus.DISAPPROVED);
-    const approvalRate = finalizedItems.length > 0 ? (approvedItems.length / finalizedItems.length * 100).toFixed(1) + '%' : 'N/A';
-    
-    // Pharmacy
-    const pharmacistTimes = source
-      .filter(i => i.dispensed_date && i.created_at)
-      .map(i => new Date(i.dispensed_date!).getTime() - new Date(i.created_at!).getTime())
-      .filter(time => !isNaN(time) && time >= 0) as number[]; 
-
-    const avgPharmacistTime = pharmacistTimes.length > 0 ? formatDuration((pharmacistTimes as number[]).reduce((a, b) => a + b, 0) / (pharmacistTimes as number[]).length) : 'N/A';
-    
-    const pharmacistDecisions = [
-        { name: 'Approved', value: pharmacyHandled.filter(p => p.status === PrescriptionStatus.APPROVED).length },
-        { name: 'Disapproved', value: pharmacyHandled.filter(p => p.status === PrescriptionStatus.DISAPPROVED && !p.ids_disapproved_at).length }, 
-        { name: 'Forwarded', value: pharmacyHandled.filter(p => p.status === PrescriptionStatus.FOR_IDS_APPROVAL || (p.drug_type === DrugType.RESTRICTED && (p.ids_approved_at || p.ids_disapproved_at))).length },
-    ];
-    
-    // IDS
-    const idsConsults = source.filter(i => (i.ids_approved_at || i.ids_disapproved_at) && i.dispensed_date);
-    
-    const idsTimes = idsConsults
-      .map(i => {
-        const approvedTime = i.ids_approved_at ? new Date(i.ids_approved_at).getTime() : NaN;
-        const disapprovedTime = i.ids_disapproved_at ? new Date(i.ids_disapproved_at).getTime() : NaN;
-        const dispensedTime = i.dispensed_date ? new Date(i.dispensed_date).getTime() : NaN;
-        
-        if (!isNaN(approvedTime) && !isNaN(dispensedTime)) return approvedTime - dispensedTime;
-        if (!isNaN(disapprovedTime) && !isNaN(dispensedTime)) return disapprovedTime - dispensedTime;
-        return NaN;
-      })
-      .filter(time => !isNaN(time) && time >= 0) as number[]; 
-
-    const avgIdsTime = idsTimes.length > 0 ? formatDuration((idsTimes as number[]).reduce((a, b) => a + b, 0) / (idsTimes as number[]).length) : 'N/A';
-    
-    // Aggregating IDS stats using canonical name for Tibayan
-    const idsOutcomesMap = new Map<string, { approved: number, disapproved: number }>();
-    idsHandled.forEach(i => {
-        const name = getCanonicalIdsName(i.id_specialist) || 'Unknown';
-        const stats = idsOutcomesMap.get(name) || { approved: 0, disapproved: 0 };
-        if (i.status === PrescriptionStatus.APPROVED) stats.approved++;
-        if (i.status === PrescriptionStatus.DISAPPROVED) stats.disapproved++;
-        idsOutcomesMap.set(name, stats);
-    });
-
-    const totalApprovedIds = Array.from(idsOutcomesMap.values()).reduce((sum, s) => sum + s.approved, 0);
-    const totalDisapprovedIds = Array.from(idsOutcomesMap.values()).reduce((sum, s) => sum + s.disapproved, 0);
-
-    const idsOutcomes = [
-      { name: 'Approved', value: totalApprovedIds },
-      { name: 'Disapproved', value: totalDisapprovedIds }
-    ];
+    const approved = source.filter(i => i.status === PrescriptionStatus.APPROVED);
+    const disapproved = source.filter(i => i.status === PrescriptionStatus.DISAPPROVED);
+    const throughput = approved.length + disapproved.length;
+    const approvalRate = throughput > 0 ? (approved.length / throughput * 100).toFixed(1) + '%' : '0%';
     
     const getFindingsDistribution = (items: Prescription[]) => {
         const counts: Record<string, number> = {};
         items.forEach(item => {
-            if (item.findings && Array.isArray(item.findings)) {
-                item.findings.forEach(f => {
-                    counts[f.category] = (counts[f.category] || 0) + 1;
-                });
-            }
+            item.findings?.forEach(f => {
+                counts[f.category] = (counts[f.category] || 0) + 1;
+            });
         });
-        return Object.entries(counts).map(([name, value]) => ({ name, value }));
+        return Object.entries(counts).map(([name, value]) => ({ name, value })).sort((a,b) => b.value - a.value);
     };
-    
-    const interventionStats = getFindingsDistribution(source);
 
-    // BREAKDOWN FOR 'OTHERS' IN PHARMACY FINDINGS
-    const otherDetailsList: string[] = [];
-    source.forEach(item => {
-        item.findings?.forEach(f => {
-            if (f.category === 'Others' && f.details) {
-                otherDetailsList.push(f.details.trim());
-            }
-        });
-    });
-    // Standard frequency fallback
-    const otherDetailsStats = getTopN(otherDetailsList, 15);
+    const getStats = (items: Prescription[]) => {
+      const total = items.length;
+      const app = items.filter(i => i.status === PrescriptionStatus.APPROVED).length;
+      const dis = items.filter(i => i.status === PrescriptionStatus.DISAPPROVED).length;
+      const activeThroughput = app + dis;
+      const rate = activeThroughput > 0 ? (app / activeThroughput * 100).toFixed(1) + '%' : '0%';
+      return { total, app, dis, activeThroughput, rate };
+    };
 
-    const avgTimePerIds = Object.entries((idsConsults as Prescription[]).reduce((acc: Record<string, number[]>, curr: Prescription) => {
-        if (curr.id_specialist) { 
-            const canonicalName = getCanonicalIdsName(curr.id_specialist) || 'Unknown';
-            const approvedTime = curr.ids_approved_at ? new Date(curr.ids_approved_at).getTime() : NaN;
-            const disapprovedTime = curr.ids_disapproved_at ? new Date(curr.ids_disapproved_at).getTime() : NaN;
-            const dispensedTime = curr.dispensed_date ? new Date(curr.dispensed_date).getTime() : NaN;
-            
-            let timeDiff: number | null = null;
-            if (!isNaN(approvedTime) && !isNaN(dispensedTime)) timeDiff = approvedTime - dispensedTime;
-            else if (!isNaN(disapprovedTime) && !isNaN(dispensedTime)) timeDiff = disapprovedTime - dispensedTime;
+    const resItems = source.filter(d => d.drug_type === DrugType.RESTRICTED);
+    const monItems = source.filter(d => d.drug_type === DrugType.MONITORED);
 
-            if (timeDiff !== null && !isNaN(timeDiff) && timeDiff >= 0) {
-              if (!acc[canonicalName]) acc[canonicalName] = [];
-              acc[canonicalName].push(timeDiff);
-            }
-        }
-        return acc;
-    }, {} as Record<string, number[]>)).map(([name, times]) => ({ name, value: (times.reduce((a,b)=>a+b,0)/times.length)/(1000*60*60) }));
+    const idsConsults = source.filter(i => i.ids_approved_at || i.ids_disapproved_at);
+    const idsApprovedCount = idsConsults.filter(i => i.status === PrescriptionStatus.APPROVED).length;
+    const idsApprovalRate = idsConsults.length > 0 ? (idsApprovedCount / idsConsults.length * 100).toFixed(1) + '%' : '0%';
 
-
-    // Monthly Trend Calculation
-    const monthlyTrend = Array.from({ length: 12 }, (_, monthIdx) => {
-        const monthName = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][monthIdx];
-        const count = data.filter(item => {
-            const d = item.req_date ? new Date(item.req_date) : new Date(item.created_at || Date.now());
-            return d.getFullYear() === selectedYear && d.getMonth() === monthIdx && item.status !== PrescriptionStatus.DELETED;
-        }).length;
-        return { name: monthName, value: count };
-    });
-
-    // --- GENERAL ANALYSIS UPGRADES ---
-    const ageBrackets = [
-      { name: 'Pediatric (0-18)', value: 0 },
-      { name: 'Young Adult (19-35)', value: 0 },
-      { name: 'Middle Age (36-60)', value: 0 },
-      { name: 'Elderly (61+)', value: 0 },
-    ];
-
-    const drugDeptMap = new Map<string, Map<string, number>>();
-    const drugWardMap = new Map<string, Map<string, number>>();
-
-    source.forEach(item => {
-      // 1. Age Processing
-      const ageVal = parseInt(item.age || '0');
-      const isPediaStr = (item.age || '').toLowerCase().includes('mo') || (item.age || '').toLowerCase().includes('day') || (item.mode === 'pediatric');
-      
-      if (isPediaStr || ageVal <= 18) ageBrackets[0].value++;
-      else if (ageVal <= 35) ageBrackets[1].value++;
-      else if (ageVal <= 60) ageBrackets[2].value++;
-      else ageBrackets[3].value++;
-
-      // 2. Top Drug Per Dept
-      if (item.clinical_dept) {
-        const dMap = drugDeptMap.get(item.clinical_dept) || new Map<string, number>();
-        dMap.set(item.antimicrobial, (dMap.get(item.antimicrobial) || 0) + 1);
-        drugDeptMap.set(item.clinical_dept, dMap);
-      }
-
-      // 3. Top Drug Per Ward
-      if (item.ward) {
-        const wMap = drugWardMap.get(item.ward) || new Map<string, number>();
-        wMap.set(item.antimicrobial, (wMap.get(item.antimicrobial) || 0) + 1);
-        drugWardMap.set(item.ward, wMap);
-      }
-    });
-
-    const topDrugPerDept = Array.from(drugDeptMap.entries()).map(([dept, drugCounts]) => {
-      const top = Array.from(drugCounts.entries()).sort((a,b) => b[1] - a[1])[0];
-      return { name: dept, drug: top[0], value: top[1] };
-    }).sort((a,b) => b.value - a.value).slice(0, 10);
-
-    const topDrugPerWard = Array.from(drugWardMap.entries()).map(([ward, drugCounts]) => {
-      const top = Array.from(drugCounts.entries()).sort((a,b) => b[1] - a[1])[0];
-      return { name: ward, drug: top[0], value: top[1] };
-    }).sort((a,b) => b.value - a.value).slice(0, 10);
+    const idsTurnaroundHours = idsConsults
+      .filter(i => i.dispensed_date && (i.ids_approved_at || i.ids_disapproved_at))
+      .map(i => {
+          const start = new Date(i.dispensed_date!).getTime();
+          const end = new Date(i.ids_approved_at || i.ids_disapproved_at!).getTime();
+          return Math.max(0, (end - start) / (1000 * 60 * 60));
+      });
+    const avgIdsHours = idsTurnaroundHours.length > 0 ? (idsTurnaroundHours.reduce((a,b)=>a+b,0)/idsTurnaroundHours.length).toFixed(1) : '0';
 
     return {
       general: {
-        totalRequests: source.length, 
-        totalApproved: approvedItems.length,
+        totalRequests: source.length,
+        totalDisapproved: disapproved.length,
+        totalApproved: approved.length,
         approvalRate,
-        adultCount: source.filter(p => p.mode === 'adult').length,
-        pediaCount: source.filter(p => p.mode === 'pediatric').length,
-        approvedTypeData: [{ name: DrugType.MONITORED, value: approvedItems.filter(i => i.drug_type === DrugType.MONITORED).length },{ name: DrugType.RESTRICTED, value: approvedItems.filter(i => i.drug_type === DrugType.RESTRICTED).length }],
-        topAntimicrobials: getTopN(source.map(i => i.antimicrobial), 5),
-        topDepartments: getTopN(source.map(i => i.clinical_dept), 5),
-        topWards: getTopN(source.map(i => i.ward), 5),
-        indicationData: getTopN(source.map(i => i.indication), 5),
-        systemSiteData: getTopN(source.map(i => i.system_site === 'OTHERS (SPECIFY)' ? i.system_site_other : i.system_site), 10),
-        monthlyTrend,
-        ageGroupData: ageBrackets.filter(b => b.value > 0),
-        topDrugPerDept,
-        topDrugPerWard
+        topAntimicrobials: getTopN(approved.map(i => i.antimicrobial), 5),
+        topDepartments: getTopN(approved.map(i => i.clinical_dept), 5),
+        topWards: getTopN(approved.map(i => i.ward), 5),
+        deptCensus: getCensus(source.map(i => i.clinical_dept)),
+        wardCensus: getCensus(source.map(i => i.ward)),
+        indicationData: getTopN(approved.map(i => i.indication), 5),
+        systemSiteData: getTopN(approved.map(i => i.system_site === 'OTHERS (SPECIFY)' ? i.system_site_other : i.system_site), 15),
       },
       restricted: {
-        total: restrictedData.length,
-        approvalRate: (totalApprovedIds / (totalApprovedIds + totalDisapprovedIds) * 100 || 0).toFixed(1) + '%',
-        avgIdsTime,
-        topDrugs: getTopN(restrictedData.map(d => d.antimicrobial), 5),
-        topIndications: getTopN(restrictedData.map(d => d.indication), 5),
-        idsOutcomes,
+        stats: getStats(resItems),
+        census: getCensus(resItems.map(d => d.antimicrobial)),
+        topDrugs: getTopN(approved.filter(d => d.drug_type === DrugType.RESTRICTED).map(d => d.antimicrobial), 5),
+        topDepts: getTopN(approved.filter(d => d.drug_type === DrugType.RESTRICTED).map(d => d.clinical_dept), 5),
+        topWards: getTopN(approved.filter(d => d.drug_type === DrugType.RESTRICTED).map(d => d.ward), 5),
+        interventions: getFindingsDistribution(resItems),
       },
       monitored: {
-        total: monitoredData.length,
-        approvalRate: (monitoredData.filter(d => d.status === PrescriptionStatus.APPROVED).length / monitoredData.length * 100 || 0).toFixed(1) + '%',
-        avgPharmacistTime,
-        topDrugs: getTopN(monitoredData.map(d => d.antimicrobial), 5),
-        topWards: getTopN(monitoredData.map(d => d.ward), 5),
+        stats: getStats(monItems),
+        census: getCensus(monItems.map(d => d.antimicrobial)),
+        topDrugs: getTopN(approved.filter(d => d.drug_type === DrugType.MONITORED).map(d => d.antimicrobial), 5),
+        topDepts: getTopN(approved.filter(d => d.drug_type === DrugType.MONITORED).map(d => d.clinical_dept), 5),
+        topWards: getTopN(approved.filter(d => d.drug_type === DrugType.MONITORED).map(d => d.ward), 5),
+        interventions: getFindingsDistribution(monItems),
+      },
+      disapproved: {
+        total: disapproved.length,
+        topDepts: getTopN(disapproved.map(i => i.clinical_dept), 5),
+        topWards: getTopN(disapproved.map(i => i.ward), 5),
+        topDrugs: getTopN(disapproved.map(i => i.antimicrobial), 5),
+        interventions: getFindingsDistribution(disapproved),
       },
       pharmacy: {
-        totalHandled: pharmacyHandled.length, avgPharmacistTime,
-        topPharmacists: getTopN(pharmacyHandled.map(p => p.dispensed_by), 5), 
-        decisions: pharmacistDecisions,
-        interventionStats, 
-        otherDetailsList, // Raw list for AI
-        otherDetailsStats // Raw breakdown for fallback
+        totalActions: source.filter(i => i.dispensed_date).length,
+        approvedCount: source.filter(i => i.status === PrescriptionStatus.APPROVED && i.dispensed_by).length,
+        disapprovedCount: source.filter(i => i.status === PrescriptionStatus.DISAPPROVED && i.dispensed_by).length,
+        interventions: getFindingsDistribution(source).slice(0, 10),
+        topPharmacists: getTopN(source.map(i => i.dispensed_by), 10),
+        otherDetailsList: source.flatMap(i => i.findings?.filter(f => f.category === 'Others').map(f => f.details) || []),
       },
       ids: {
-        totalConsults: idsHandled.length, avgIdsTime,
-        approvalRate: (totalApprovedIds / (totalApprovedIds + totalDisapprovedIds) * 100 || 0).toFixed(1) + '%',
-        topConsultants: getTopN(idsHandled.map(p => p.id_specialist), 5, true), 
-        outcomes: idsOutcomes,
-        avgTimePerConsultant: avgTimePerIds
+        consults: idsConsults.length,
+        approvalRate: idsApprovalRate,
+        avgHours: avgIdsHours,
+        pendingPerIds: getTopN(source.filter(i => i.status === PrescriptionStatus.FOR_IDS_APPROVAL).map(i => i.id_specialist), 10, true),
+        turnaroundPerIds: Object.entries(idsConsults.reduce((acc: any, curr) => {
+            const name = getCanonicalIdsName(curr.id_specialist) || 'Unknown';
+            const start = new Date(curr.dispensed_date!).getTime();
+            const end = new Date(curr.ids_approved_at || curr.ids_disapproved_at!).getTime();
+            if(!isNaN(start) && !isNaN(end)) {
+                if(!acc[name]) acc[name] = [];
+                acc[name].push((end - start) / (1000 * 60 * 60));
+            }
+            return acc;
+        }, {})).map(([name, values]: any) => ({ name, value: parseFloat((values.reduce((a:any,b:any)=>a+b,0)/values.length).toFixed(1)) })),
+        outcomesPerIds: Object.entries(idsConsults.reduce((acc: any, curr) => {
+            const name = getCanonicalIdsName(curr.id_specialist) || 'Unknown';
+            if(!acc[name]) acc[name] = { Approved: 0, Disapproved: 0 };
+            if(curr.status === PrescriptionStatus.APPROVED) acc[name].Approved++;
+            else if(curr.status === PrescriptionStatus.DISAPPROVED) acc[name].Disapproved++;
+            return acc;
+        }, {})).map(([name, val]: any) => ({ name, ...val }))
       }
     };
-  }, [modeFilteredData, data, selectedYear]);
+  }, [modeFilteredData]);
 
-  // --- AI Manual Clustering Logic ---
   const handleClusterOthers = async () => {
-    const remarks = processedData.pharmacy.otherDetailsList;
-    if (remarks.length === 0) return;
-    
+    if (processedData.pharmacy.otherDetailsList.length === 0) return;
     setIsAnalyzingOthers(true);
     try {
-      const result = await summarizeOtherInterventions(remarks);
+      const result = await summarizeOtherInterventions(processedData.pharmacy.otherDetailsList);
       setAiOthersData(result);
-    } catch (err) {
-      console.error("AI Analysis failed", err);
-    } finally {
-      setIsAnalyzingOthers(false);
-    }
+    } catch (err) { console.error(err); } finally { setIsAnalyzingOthers(false); }
   };
 
-  // Reset AI data when filters change
-  useEffect(() => {
-    setAiOthersData([]);
-    setIsAnalyzingOthers(false);
-  }, [selectedMonth, selectedYear, modeFilter]);
+  const handleDrillDown = (field: keyof Prescription | 'ids_specialist_match' | 'system_site_match' | 'finding_category', value: string, sourceData?: Prescription[]) => {
+    const drillSource = sourceData || modeFilteredData;
+    let filtered: Prescription[] = [];
 
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ff7300', '#00ced1', '#ffc0cb'];
+    if (field === 'ids_specialist_match') {
+        filtered = drillSource.filter(i => getCanonicalIdsName(i.id_specialist) === value);
+    } else if (field === 'system_site_match') {
+        filtered = drillSource.filter(i => (i.system_site === 'OTHERS (SPECIFY)' ? i.system_site_other : i.system_site) === value);
+    } else if (field === 'finding_category') {
+        filtered = drillSource.filter(i => i.findings?.some(f => f.category === value));
+    } else {
+        filtered = drillSource.filter(i => String(i[field]) === value);
+    }
+
+    setModalConfig({
+        isOpen: true,
+        data: filtered,
+        title: `Drilldown: ${value}`
+    });
+  };
 
   const renderDashboard = () => {
     switch(activeTab) {
       case 'General':
         const g = processedData.general;
-        return <div className="space-y-6">
-            {/* Monthly Comparison Chart for "All Months" */}
-            {selectedMonth === -1 && (
-                <ChartWrapper title={`Monthly Request Trend (${selectedYear})`}>
-                    <ResponsiveContainer>
-                        <BarChart data={g.monthlyTrend} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                            <XAxis dataKey="name" />
-                            <YAxis />
-                            <Tooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
-                            <Bar dataKey="value" name="Requests" fill="#009a3e" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </ChartWrapper>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <KpiCard title="Total Requests" value={g.totalRequests} color="bg-gray-100 text-gray-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests'})} />
-              <KpiCard title="Total Approved" value={g.totalApproved} color="bg-green-50 text-green-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => d.status === PrescriptionStatus.APPROVED), title: 'All Approved Requests'})} />
-              <KpiCard title="Overall Approval Rate" value={g.approvalRate} color="bg-blue-50 text-blue-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d=>d.status === 'approved' || d.status === 'disapproved'), title: 'All Finalized Requests'})} />
-              <KpiCard title="Adult vs. Pedia" value={`${g.adultCount} / ${g.pediaCount}`} subValue="Case Breakdown" color="bg-purple-50 text-purple-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests'})} />
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <ChartWrapper title="Age Group Distribution">
-                <ResponsiveContainer>
-                  <PieChart>
-                    <Pie data={g.ageGroupData} dataKey="value" nameKey="name" outerRadius={100} label>
-                      {g.ageGroupData.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </ChartWrapper>
-              
-              <ChartWrapper title="Indication Distribution" onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests by Indication'})}>
-                <ResponsiveContainer>
-                  <PieChart>
-                    <Pie data={g.indicationData} dataKey="value" nameKey="name" outerRadius={100} label>
-                        {g.indicationData.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </ChartWrapper>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <ChartWrapper title="Top Antimicrobial per Department" heightClass="h-[500px]">
-                <ResponsiveContainer>
-                  <BarChart data={g.topDrugPerDept} layout="vertical" margin={{ left: 100, right: 30 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                    <XAxis type="number" />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={100} />
-                    <Tooltip content={({ active, payload, label }) => {
-                        if (active && payload && payload.length) {
-                          const data = payload[0].payload;
-                          return (
-                            <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-xl text-xs">
-                              <p className="font-bold text-gray-900">{label}</p>
-                              <p className="text-blue-600 mt-1">Main Drug: <span className="font-black">{data.drug}</span></p>
-                              <p className="text-gray-500">Count: {data.value} requests</p>
-                            </div>
-                          );
-                        }
-                        return null;
-                    }} />
-                    <Bar dataKey="value" fill="#8884d8" radius={[0, 4, 4, 0]}>
-                       {g.topDrugPerDept.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartWrapper>
-
-              <ChartWrapper title="Top Antimicrobial per Ward/Unit" heightClass="h-[500px]">
-                <ResponsiveContainer>
-                  <BarChart data={g.topDrugPerWard} layout="vertical" margin={{ left: 120, right: 30 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                    <XAxis type="number" />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={120} />
-                    <Tooltip content={({ active, payload, label }) => {
-                        if (active && payload && payload.length) {
-                          const data = payload[0].payload;
-                          return (
-                            <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-xl text-xs">
-                              <p className="font-bold text-gray-900">{label}</p>
-                              <p className="text-emerald-600 mt-1">Main Drug: <span className="font-black">{data.drug}</span></p>
-                              <p className="text-gray-500">Count: {data.value} requests</p>
-                            </div>
-                          );
-                        }
-                        return null;
-                    }} />
-                    <Bar dataKey="value" fill="#82ca9d" radius={[0, 4, 4, 0]}>
-                       {g.topDrugPerWard.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartWrapper>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <ChartWrapper title="System / Site Breakdown" onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests by System/Site'})}>
-                <ResponsiveContainer>
-                  <BarChart data={g.systemSiteData} layout="vertical" margin={{ left: 80 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                    <XAxis type="number" />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={80} />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="#00C49F" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartWrapper>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Top5List title="Top 5 Departments" data={g.topDepartments} color="bg-emerald-100 text-emerald-800" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests by Department'})} />
-                <Top5List title="Top 5 Wards / Units" data={g.topWards} color="bg-blue-100 text-blue-800" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests by Ward'})} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6">
-              <Top5List title="Top 5 Antimicrobials (Overall)" data={g.topAntimicrobials} color="bg-gray-200 text-gray-800" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData, title: 'All Requests'})} />
-            </div>
-        </div>
-
-      case 'AMS Monitoring':
-        const mon = processedMonitoring;
-        return <div className="space-y-6 animate-fade-in">
+        const approvedData = modeFilteredData.filter(i => i.status === PrescriptionStatus.APPROVED);
+        return (
+          <div className="space-y-6 animate-fade-in">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <KpiCard title="Active Patients" value={mon.activePatients} color="bg-blue-100 text-blue-700" icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}/>
-                <KpiCard title="Cumulative Missed" value={mon.totalMissed} subValue="Last doses logged" color="bg-red-100 text-red-700" icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}/>
-                <KpiCard title="Completed" value={mon.completedCount} color="bg-green-100 text-green-700" icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}/>
-                <KpiCard title="Avg. DOT" value={`${mon.avgDot} days`} color="bg-teal-100 text-teal-700" icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}/>
+                <KpiCard title="Total Requests" value={g.totalRequests} subValue="All status" color="bg-gray-100 text-gray-700" icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>} onClick={() => handleDrillDown('status', 'all_records', modeFilteredData)}/>
+                <KpiCard title="Total Approved" value={g.totalApproved} color="bg-green-100 text-green-700" icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} onClick={() => handleDrillDown('status', 'approved')}/>
+                <KpiCard title="Total Disapproved" value={g.totalDisapproved} color="bg-red-100 text-red-700" icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>} onClick={() => handleDrillDown('status', 'disapproved')}/>
+                <KpiCard title="Approval Rate" value={g.approvalRate} color="bg-blue-100 text-blue-700" icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>} />
             </div>
-            
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <ChartWrapper title="Therapy Status Breakdown">
+                <ChartWrapper title="Department Breakdown (Census)">
                     <ResponsiveContainer>
-                        <PieChart>
-                            <Pie data={mon.outcomes} dataKey="value" nameKey="name" outerRadius={100} label>
-                                {mon.outcomes.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
-                            </Pie>
-                            <Tooltip />
-                            <Legend />
-                        </PieChart>
-                    </ResponsiveContainer>
-                </ChartWrapper>
-                <ChartWrapper title="Reasons for Missed Doses">
-                    <ResponsiveContainer>
-                        <BarChart data={mon.missedReasons} layout="vertical" margin={{ left: 80 }}>
+                        <BarChart data={g.deptCensus} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('clinical_dept', e.activeLabel)}>
                             <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                             <XAxis type="number" />
-                            <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} />
+                            <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={110} cursor="pointer" />
                             <Tooltip />
-                            <Bar dataKey="value" fill="#ef4444" radius={[0, 4, 4, 0]} />
+                            <Bar dataKey="value" fill="#6366f1" radius={[0, 4, 4, 0]} cursor="pointer"/>
                         </BarChart>
                     </ResponsiveContainer>
                 </ChartWrapper>
-                <Top5List title="Top Monitored Antimicrobials" data={mon.topMonitoringDrugs} color="bg-indigo-100 text-indigo-700" icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>} />
-            </div>
-        </div>;
-
-      case 'Audits':
-        const a = processedAuditData;
-        return <div className="space-y-6 animate-fade-in">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <KpiCard title="Total Audits" value={a.totalAudits} subValue={`Covering ${a.totalAbx} drugs`} color="bg-amber-100 text-amber-700" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}/>
-                <KpiCard title="Guidelines Compliant" value={(a.complianceData[0].value).toFixed(1) + '%'} subValue={`${a.complianceData[0].count}/${a.totalAbx} items`} color="bg-green-100 text-green-700" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}/>
-                <KpiCard title="Indication Documented" value={(a.complianceData[1].value).toFixed(1) + '%'} subValue={`${a.complianceData[1].count}/${a.totalAbx} items`} color="bg-blue-100 text-blue-700" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>}/>
-            </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <ChartWrapper title="Audit Compliance Rates">
+                <ChartWrapper title="Ward Breakdown (Census)">
                     <ResponsiveContainer>
-                        <BarChart data={a.complianceData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" horizontal={false}/>
-                            <XAxis type="number" domain={[0, 100]} />
-                            <YAxis type="category" dataKey="name" width={100} tick={{fontSize: 12}} />
-                            <Tooltip formatter={(value: number) => `${value.toFixed(1)}%`} cursor={{fill: 'transparent'}} />
-                            <Bar dataKey="value" fill="#f59e0b" radius={[0, 4, 4, 0]} barSize={30}>
-                                {a.complianceData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={index === 0 ? '#10b981' : (index === 1 ? '#3b82f6' : '#f59e0b')} />
-                                ))}
-                            </Bar>
+                        <BarChart data={g.wardCensus} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('ward', e.activeLabel)}>
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                            <XAxis type="number" />
+                            <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={110} cursor="pointer" />
+                            <Tooltip />
+                            <Bar dataKey="value" fill="#ec4899" radius={[0, 4, 4, 0]} cursor="pointer"/>
                         </BarChart>
                     </ResponsiveContainer>
                 </ChartWrapper>
+            </div>
 
-                <ChartWrapper title="Diagnosis Breakdown">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <ChartWrapper title="Top 5 Antimicrobials (Approved)">
+                    <ResponsiveContainer>
+                        <BarChart data={g.topAntimicrobials} layout="vertical" margin={{ left: 100 }} onClick={(e) => e && e.activeLabel && handleDrillDown('antimicrobial', e.activeLabel, approvedData)}>
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                            <XAxis type="number" />
+                            <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={100} cursor="pointer"/>
+                            <Tooltip />
+                            <Bar dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} cursor="pointer"/>
+                        </BarChart>
+                    </ResponsiveContainer>
+                </ChartWrapper>
+                <ChartWrapper title="Indications Breakdown (Approved)">
                     <ResponsiveContainer>
                         <PieChart>
-                            <Pie data={a.diagnosisData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                                {a.diagnosisData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                ))}
+                            <Pie 
+                                data={g.indicationData} 
+                                dataKey="value" 
+                                nameKey="name" 
+                                outerRadius={120} 
+                                label={renderCustomizedPieLabel} 
+                                labelLine={false}
+                                onClick={(e) => handleDrillDown('indication', e.name, approvedData)}
+                            >
+                                {g.indicationData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} cursor="pointer"/>)}
                             </Pie>
                             <Tooltip />
-                            <Legend />
+                            <Legend verticalAlign="bottom" height={36}/>
                         </PieChart>
                     </ResponsiveContainer>
                 </ChartWrapper>
             </div>
+            
+            <ChartWrapper title="Detailed System / Site Breakdown (Approved)" heightClass="h-[600px]">
+                <ResponsiveContainer>
+                    <BarChart data={g.systemSiteData} layout="vertical" margin={{ left: 150 }} onClick={(e) => e && e.activeLabel && handleDrillDown('system_site_match', e.activeLabel, approvedData)}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <XAxis type="number" />
+                        <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={140} cursor="pointer" />
+                        <Tooltip />
+                        <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} cursor="pointer"/>
+                    </BarChart>
+                </ResponsiveContainer>
+            </ChartWrapper>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Top5List title="Top Auditors" data={a.topAuditors} color="bg-amber-200 text-amber-900" icon={<></>} />
-                <Top5List title="Top Audited Drugs" data={a.topDrugs} color="bg-blue-200 text-blue-900" icon={<></>} />
-                <Top5List title="Top Wards Audited" data={a.topWards} color="bg-green-200 text-green-900" icon={<></>} />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                 <Top5List title="Top 5 Departments (Approved)" data={g.topDepartments} color="bg-emerald-600" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: approvedData, title: 'Approved Requests by Department'})}/>
+                 <Top5List title="Top 5 Wards (Approved)" data={g.topWards} color="bg-blue-600" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: approvedData, title: 'Approved Requests by Ward'})}/>
             </div>
-        </div>;
+          </div>
+        );
 
       case 'Restricted':
-        const r = processedData.restricted;
-        return <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <KpiCard title="Total Restricted Requests" value={r.total} color="bg-purple-100 text-purple-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => d.drug_type === DrugType.RESTRICTED), title: 'All Restricted Requests'})}/>
-                <KpiCard title="IDS Approval Rate" value={r.approvalRate} color="bg-yellow-100 text-yellow-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => IDS_SPECIALISTS.includes(getCanonicalIdsName(d.id_specialist) || '')), title: 'All IDS Consults'})}/>
-                <KpiCard title="Avg. IDS Review Time" value={r.avgIdsTime} color="bg-yellow-100 text-yellow-700" icon={<></>}/>
+      case 'Monitored':
+        const typeKey = activeTab.toLowerCase() as 'restricted' | 'monitored';
+        const t = processedData[typeKey];
+        const typeSource = modeFilteredData.filter(i => i.drug_type.toLowerCase() === typeKey);
+        const typeApproved = typeSource.filter(i => i.status === PrescriptionStatus.APPROVED);
+        return (
+          <div className="space-y-6 animate-fade-in">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <KpiCard title={`Total ${activeTab} Requests`} value={t.stats.total} color="bg-gray-100 text-gray-700" icon={<></>} onClick={() => handleDrillDown('drug_type', activeTab, modeFilteredData)}/>
+                <KpiCard title={`Total Approved ${activeTab}`} value={t.stats.app} color="bg-green-100 text-green-700" icon={<></>} onClick={() => handleDrillDown('status', 'approved', typeSource)}/>
+                <KpiCard title={`Total Disapproved ${activeTab}`} value={t.stats.dis} color="bg-red-100 text-red-700" icon={<></>} onClick={() => handleDrillDown('status', 'disapproved', typeSource)}/>
+                <KpiCard title="Approval Rate" value={t.stats.rate} color="bg-blue-100 text-blue-700" icon={<></>} />
             </div>
+
+            <ChartWrapper title={`${activeTab} Antimicrobial Census (Usage Breakdown)`}>
+                <ResponsiveContainer>
+                    <BarChart data={t.census} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('antimicrobial', e.activeLabel, typeSource)}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <XAxis type="number" />
+                        <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={110} cursor="pointer" />
+                        <Tooltip />
+                        <Bar dataKey="value" fill="#8b5cf6" radius={[0, 4, 4, 0]} cursor="pointer" />
+                    </BarChart>
+                </ResponsiveContainer>
+            </ChartWrapper>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Top5List title="Top 5 Restricted Antimicrobials" data={r.topDrugs} color="bg-purple-200 text-purple-800" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => d.drug_type === DrugType.RESTRICTED), title: 'All Restricted Requests'})} />
-                <Top5List title="Top 5 Indications for Restricted Drugs" data={r.topIndications} color="bg-purple-200 text-purple-800" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => d.drug_type === DrugType.RESTRICTED && d.indication), title: 'All Restricted Requests with Indication'})}/>
-                <ChartWrapper title="IDS Review Outcomes">
-                  <ResponsiveContainer>
-                    <PieChart>
-                      <Pie data={r.idsOutcomes} dataKey="value" nameKey="name" outerRadius={80} label>
-                        <Cell fill="#16a34a"/><Cell fill="#ef4444"/>
-                      </Pie>
-                      <Tooltip content={<CustomTooltip/>}/>
-                      <Legend/>
-                    </PieChart>
-                  </ResponsiveContainer>
+                <ChartWrapper title={`Top 5 ${activeTab} Drugs (Approved)`}>
+                    <ResponsiveContainer>
+                        <BarChart data={t.topDrugs} layout="vertical" margin={{ left: 100 }} onClick={(e) => e && e.activeLabel && handleDrillDown('antimicrobial', e.activeLabel, typeApproved)}>
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                            <XAxis type="number" />
+                            <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={100} cursor="pointer" />
+                            <Tooltip />
+                            <Bar dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} cursor="pointer" />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </ChartWrapper>
+                <ChartWrapper title="Intervention Findings">
+                    <ResponsiveContainer>
+                        <BarChart data={t.interventions} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('finding_category', e.activeLabel, typeSource)}>
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                            <XAxis type="number" />
+                            <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={110} cursor="pointer" />
+                            <Tooltip />
+                            <Bar dataKey="value" fill="#ef4444" radius={[0, 4, 4, 0]} cursor="pointer" />
+                        </BarChart>
+                    </ResponsiveContainer>
                 </ChartWrapper>
             </div>
-        </div>
-      case 'Monitored':
-        const m = processedData.monitored;
-        return <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <KpiCard title="Total Monitored Requests" value={m.total} color="bg-blue-100 text-blue-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => d.drug_type === DrugType.MONITORED), title: 'All Monitored Requests'})}/>
-                <KpiCard title="Approval Rate (by Pharmacy)" value={m.approvalRate} color="bg-blue-100 text-blue-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => d.drug_type === DrugType.MONITORED), title: 'All Monitored Requests'})}/>
-                <KpiCard title="Avg. Pharmacist Review Time" value={m.avgPharmacistTime} color="bg-blue-100 text-blue-700" icon={<></>}/>
-            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Top5List title="Top 5 Monitored Antimicrobials" data={m.topDrugs} color="bg-blue-200 text-blue-800" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => d.drug_type === DrugType.MONITORED), title: 'All Monitored Requests'})}/>
-                <Top5List title="Top 5 Wards for Monitored Drugs" data={m.topWards} color="bg-blue-200 text-blue-800" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => d.drug_type === DrugType.MONITORED && d.ward), title: 'All Monitored Requests with Ward'})}/>
+                <Top5List title="Top 5 Departments" data={t.topDepts} color="bg-indigo-500" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: typeApproved, title: `Top 5 ${activeTab} Depts`})}/>
+                <Top5List title="Top 5 Wards" data={t.topWards} color="bg-teal-500" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: typeApproved, title: `Top 5 ${activeTab} Wards`})}/>
             </div>
-        </div>
+          </div>
+        );
+
+      case 'Disapproved':
+        const d = processedData.disapproved;
+        const disapprovedData = modeFilteredData.filter(i => i.status === PrescriptionStatus.DISAPPROVED);
+        return (
+          <div className="space-y-6 animate-fade-in">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Top5List title="Top 5 Departments" data={d.topDepts} color="bg-red-600" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: disapprovedData, title: 'Disapproved by Dept'})}/>
+                <Top5List title="Top 5 Wards" data={d.topWards} color="bg-red-500" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: disapprovedData, title: 'Disapproved by Ward'})}/>
+                <Top5List title="Top 5 Antimicrobials" data={d.topDrugs} color="bg-red-400" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: disapprovedData, title: 'Disapproved by Drug'})}/>
+            </div>
+            <ChartWrapper title="Reason for Disapproval Breakdown">
+                <ResponsiveContainer>
+                    <BarChart data={d.interventions} layout="vertical" margin={{ left: 150 }} onClick={(e) => e && e.activeLabel && handleDrillDown('finding_category', e.activeLabel, disapprovedData)}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <XAxis type="number" />
+                        <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={140} cursor="pointer" />
+                        <Tooltip />
+                        <Bar dataKey="value" fill="#ef4444" radius={[0, 4, 4, 0]} cursor="pointer" />
+                    </BarChart>
+                </ResponsiveContainer>
+            </ChartWrapper>
+          </div>
+        );
+
       case 'Pharmacy':
         const p = processedData.pharmacy;
-        
-        // --- NEW COMBINED DATA LOGIC ---
-        // Merge standard categories (except 'Others') with either AI-clustered 'Others' or raw top 'Others'
-        const baseInterventionData = p.interventionStats.filter(s => s.name !== 'Others');
-        const detailsData = aiOthersData.length > 0 ? aiOthersData : p.otherDetailsStats;
-        const overallInterventionData = [...baseInterventionData, ...detailsData].sort((a,b) => b.value - a.value);
-        
-        const isUsingAI = aiOthersData.length > 0;
-
-        return <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <KpiCard title="Total Requests Handled" value={p.totalHandled} color="bg-green-100 text-green-700" icon={<></>} />
-                <KpiCard title="Avg. First Action Time" value={p.avgPharmacistTime} color="bg-green-100 text-green-700" icon={<></>} />
+        const pharmacistActions = modeFilteredData.filter(i => i.dispensed_date && i.dispensed_by);
+        return (
+          <div className="space-y-6 animate-fade-in">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <KpiCard title="Total Pharmacist Actions" value={p.totalActions} color="bg-blue-100 text-blue-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: pharmacistActions, title: 'Pharmacist Actions'})}/>
+                <KpiCard title="Approved by Pharmacist" value={p.approvedCount} color="bg-green-100 text-green-700" icon={<></>} onClick={() => handleDrillDown('status', 'approved', pharmacistActions)}/>
+                <KpiCard title="Disapproved by Pharmacist" value={p.disapprovedCount} color="bg-red-100 text-red-700" icon={<></>} onClick={() => handleDrillDown('status', 'disapproved', pharmacistActions)}/>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div className="col-span-1">
-                    <Top5List title="Top 5 Pharmacists by Activity" data={p.topPharmacists} color="bg-green-200 text-green-800" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => d.dispensed_by && PHARMACISTS.includes(d.dispensed_by)), title: 'All Pharmacy Activity'})} />
-                </div>
-                <div className="col-span-1">
-                    <ChartWrapper title="Pharmacist Decisions">
-                      <ResponsiveContainer>
-                        <PieChart>
-                          <Pie data={p.decisions} dataKey="value" nameKey="name" outerRadius={80} label>
-                            <Cell fill="#16a34a"/><Cell fill="#ef4444"/><Cell fill="#3b82f6"/>
-                          </Pie>
-                          <Tooltip content={<CustomTooltip/>}/>
-                          <Legend/>
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </ChartWrapper>
-                </div>
-                <div className="col-span-1">
-                    <ChartWrapper title="Intervention Findings (Summary)">
-                        <ResponsiveContainer>
-                            <PieChart>
-                                <Pie data={p.interventionStats} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                                    {p.interventionStats.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                    ))}
-                                </Pie>
-                                <Tooltip />
-                                <Legend />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </ChartWrapper>
-                </div>
-            </div>
+            <ChartWrapper title="Pharmacist Activity (Total Actions)">
+                <ResponsiveContainer>
+                    <BarChart data={p.topPharmacists} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('dispensed_by', e.activeLabel)}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <XAxis type="number" />
+                        <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={110} cursor="pointer" />
+                        <Tooltip />
+                        <Bar dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} cursor="pointer" />
+                    </BarChart>
+                </ResponsiveContainer>
+            </ChartWrapper>
+            
+            <ChartWrapper 
+                title="Top Intervention Findings"
+                heightClass="h-[500px]"
+                icon={
+                    <button onClick={handleClusterOthers} disabled={isAnalyzingOthers || p.otherDetailsList.length === 0} className="text-[10px] font-black uppercase bg-indigo-600 text-white px-3 py-1 rounded-full hover:bg-indigo-700 disabled:bg-gray-300">
+                        {isAnalyzingOthers ? 'Analyzing...' : 'AI Summary (Others)'}
+                    </button>
+                }
+            >
+                <ResponsiveContainer>
+                    <BarChart data={aiOthersData.length > 0 ? aiOthersData : p.interventions} layout="vertical" margin={{ left: 150 }} onClick={(e) => e && e.activeLabel && handleDrillDown('finding_category', e.activeLabel)}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <XAxis type="number" />
+                        <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fontWeight: 'bold' }} width={140} cursor="pointer" />
+                        <Tooltip />
+                        <Bar dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} cursor="pointer" />
+                    </BarChart>
+                </ResponsiveContainer>
+            </ChartWrapper>
+          </div>
+        );
 
-            {/* Overall Intervention Findings - COMBINED VIEW */}
-            <div className="grid grid-cols-1 gap-6">
-                <ChartWrapper 
-                  title={isUsingAI ? "Overall Intervention Findings (AI-Grouped 'Others')" : "Overall Intervention Findings"}
-                  heightClass="h-[600px]"
-                  icon={
-                    <div className="flex items-center gap-3">
-                      {isAnalyzingOthers ? (
-                        <div className="flex items-center gap-2 animate-pulse text-indigo-600">
-                          <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                          <span className="text-[10px] font-black uppercase tracking-widest">AI Categorizing Others...</span>
-                        </div>
-                      ) : isUsingAI ? (
-                        <div className="flex items-center gap-2">
-                           <div className="bg-indigo-50 px-2.5 py-1 rounded-full flex items-center gap-1.5 border border-indigo-100 shadow-sm">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-indigo-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" /></svg>
-                            <span className="text-[9px] font-black text-indigo-700 uppercase tracking-tighter">AI Summary Active</span>
-                          </div>
-                          <button 
-                            onClick={() => setAiOthersData([])}
-                            className="text-[9px] font-black text-gray-400 uppercase tracking-widest hover:text-red-500 transition-colors"
-                          >
-                            Reset AI
-                          </button>
-                        </div>
-                      ) : (
-                        <button 
-                          onClick={handleClusterOthers}
-                          disabled={p.otherDetailsList.length === 0}
-                          className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-indigo-700 transition-all shadow-md active:scale-95 disabled:bg-gray-300 disabled:shadow-none"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2 17.5 9.134a1 1 0 010 1.732l-3.354 1.935-1.18 4.455a1 1 0 01-1.933 0L9.854 12.8 6.5 10.866a1 1 0 010-1.732l3.354-1.935 1.18-4.455A1 1 0 0112 2z" clipRule="evenodd" /></svg>
-                          Cluster 'Others' with AI
-                        </button>
-                      )}
-                    </div>
-                  }
-                >
-                    {overallInterventionData.length > 0 ? (
+      case 'IDS':
+        const ids = processedData.ids;
+        const idsConsults = modeFilteredData.filter(i => i.ids_approved_at || i.ids_disapproved_at);
+        return (
+            <div className="space-y-6 animate-fade-in">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <KpiCard title="IDS Approval Rate" value={ids.approvalRate} subValue="Excludes pharma disapprovals" color="bg-teal-100 text-teal-700" icon={<></>} />
+                    <KpiCard title="Avg. IDS Turnaround" value={`${ids.avgHours} hrs`} subValue="From Forward to Action" color="bg-teal-100 text-teal-700" icon={<></>} />
+                    <KpiCard title="Total Finalized Consults" value={ids.consults} color="bg-teal-100 text-teal-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: idsConsults, title: 'IDS Consultations'})} />
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <ChartWrapper title="Pending Requests per IDS">
                         <ResponsiveContainer>
-                            <BarChart data={overallInterventionData} layout="vertical" margin={{ left: 180, right: 30, top: 10, bottom: 10 }}>
+                            <BarChart data={ids.pendingPerIds} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('ids_specialist_match', e.activeLabel, modeFilteredData.filter(i => i.status === PrescriptionStatus.FOR_IDS_APPROVAL))}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                                 <XAxis type="number" />
-                                {/* Changed fontWeights to fontWeight to fix TypeScript error */}
-                                <YAxis type="category" dataKey="name" width={170} tick={{ fontSize: 9, fontWeight: 'bold' }} />
+                                <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={110} cursor="pointer" />
                                 <Tooltip />
-                                <Bar dataKey="value" name="Cases" radius={[0, 4, 4, 0]}>
-                                    {overallInterventionData.map((entry, index) => {
-                                        // Highlight standard categories in emerald, detail remarks/clusters in indigo/purple
-                                        const isStandard = p.interventionStats.some(s => s.name === entry.name && s.name !== 'Others');
-                                        return <Cell key={`cell-${index}`} fill={isStandard ? "#10b981" : (isUsingAI ? "#6366f1" : "#8884d8")} />;
-                                    })}
-                                </Bar>
+                                <Bar dataKey="value" fill="#f59e0b" radius={[0, 4, 4, 0]} cursor="pointer" />
                             </BarChart>
                         </ResponsiveContainer>
-                    ) : (
-                        <div className="flex items-center justify-center h-full text-gray-400 italic font-medium">No intervention findings documented for this period.</div>
-                    )}
+                    </ChartWrapper>
+                    <ChartWrapper title="Average Turnaround Time per IDS (Hours)">
+                        <ResponsiveContainer>
+                            <BarChart data={ids.turnaroundPerIds} layout="vertical" margin={{ left: 120 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                <XAxis type="number" />
+                                <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={110} />
+                                <Tooltip />
+                                <Bar dataKey="value" fill="#06b6d4" radius={[0, 4, 4, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </ChartWrapper>
+                </div>
+                <ChartWrapper title="IDS Decision Outcomes per Specialist">
+                    <ResponsiveContainer>
+                        <BarChart data={ids.outcomesPerIds} margin={{ top: 20, right: 30, left: 20, bottom: 5 }} onClick={(e) => e && e.activeLabel && handleDrillDown('ids_specialist_match', e.activeLabel, idsConsults)}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="name" tick={{fontSize: 10}} cursor="pointer" />
+                            <YAxis />
+                            <Tooltip />
+                            <Legend />
+                            <Bar dataKey="Approved" stackId="a" fill="#10b981" cursor="pointer" />
+                            <Bar dataKey="Disapproved" stackId="a" fill="#ef4444" cursor="pointer" />
+                        </BarChart>
+                    </ResponsiveContainer>
                 </ChartWrapper>
             </div>
-        </div>
-      case 'IDS':
-        const i = processedData.ids;
-        return <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <KpiCard title="Total IDS Consults" value={i.totalConsults} color="bg-teal-100 text-teal-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => d.id_specialist && (IDS_SPECIALISTS.includes(getCanonicalIdsName(d.id_specialist) || '') || isIdsNameMatch("Dr. Christoper John Tibayan", d.id_specialist))), title: 'All IDS Consults'})}/>
-                <KpiCard title="IDS Approval Rate" value={i.approvalRate} color="bg-teal-100 text-teal-700" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => d.id_specialist && (IDS_SPECIALISTS.includes(getCanonicalIdsName(d.id_specialist) || '') || isIdsNameMatch("Dr. Christoper John Tibayan", d.id_specialist))), title: 'All IDS Consults'})}/>
-                <KpiCard title="Avg. IDS Turnaround Time" value={i.avgIdsTime} color="bg-teal-100 text-teal-700" icon={<></>} />
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Top5List title="Top 5 IDS Consultants by Reviews" data={i.topConsultants} color="bg-teal-200 text-teal-800" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => d.id_specialist && (IDS_SPECIALISTS.includes(getCanonicalIdsName(d.id_specialist) || '') || isIdsNameMatch("Dr. Christoper John Tibayan", d.id_specialist))), title: 'All IDS Consults'})}/>
-                <ChartWrapper title="IDS Decision Outcomes">
-                  <ResponsiveContainer>
-                    <PieChart>
-                      <Pie data={i.outcomes} dataKey="value" nameKey="name" outerRadius={80} label>
-                        <Cell fill="#16a34a"/><Cell fill="#ef4444"/>
-                      </Pie>
-                      <Tooltip content={<CustomTooltip/>}/>
-                      <Legend/>
-                    </PieChart>
-                  </ResponsiveContainer>
-                </ChartWrapper>
-                <ChartWrapper title="Average time chart per IDS" onClick={() => setModalConfig({isOpen: true, data: modeFilteredData.filter(d => d.ids_approved_at || d.ids_disapproved_at), title: 'All IDS Consults'})}>
-                  <ResponsiveContainer>
-                    <BarChart data={i.avgTimePerConsultant} layout="vertical" margin={{ top: 5, right: 20, left: 100, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false}/>
-                      <XAxis type="number" domain={[0, 'dataMax + 2']} />
-                      <YAxis type="category" dataKey="name" tick={{fontSize: 12}} />
-                      <Tooltip content={<CustomTooltip />} formatter={(value: string | number) => `${Number(value).toFixed(1)} hrs`}/>
-                      <Bar dataKey="value" name="Avg. Hours" fill="#0d9488" radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </ChartWrapper>
-            </div>
-        </div>
-      default: // General Analysis already covered as 'General' case
-        return null;
-    }
-  }
+        );
 
-  const tabs = useMemo(() => {
-    const baseTabs = ['General', 'Restricted', 'Monitored', 'Pharmacy', 'AMS Monitoring'];
-    if (role === 'PHARMACIST') {
-        return baseTabs.slice(0, 4); 
+      default: return null;
     }
-    return [...baseTabs, 'IDS', 'Audits'];
+  };
+
+  const availableTabs = useMemo(() => {
+    const base = ['General', 'Restricted', 'Monitored', 'Disapproved', 'Pharmacy', 'IDS'];
+    if (role === 'AMS_ADMIN') return [...base, 'Audits', 'AMS Monitoring'];
+    return base;
   }, [role]);
 
   return (
     <div className="space-y-8">
-      <ChartDetailModal isOpen={modalConfig.isOpen} onClose={handleModalClose} data={modalConfig.data} title={modalConfig.title} />
+      <ChartDetailModal isOpen={modalConfig.isOpen} onClose={() => setModalConfig({ ...modalConfig, isOpen: false })} data={modalConfig.data} title={modalConfig.title} />
       
-      {/* Unified Filter Bar */}
       <div className="bg-white p-4 rounded-xl shadow-md border border-gray-200 flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2 flex-wrap justify-center">
-            <span className="text-sm font-bold text-gray-600 mr-2">Patient Mode:</span>
-            {(['All', 'adult', 'pediatric'] as const).map(mode => (
-                <button key={mode} onClick={() => setModeFilter(mode)} className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-colors ${modeFilter === mode ? 'bg-green-600 text-white shadow' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-                    {mode.charAt(0).toUpperCase() + mode.slice(1)}
+            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mr-2">Patient Mode</span>
+            {(['All', 'adult', 'pediatric'] as const).map(m => (
+                <button key={m} onClick={() => setModeFilter(m)} className={`px-4 py-1.5 text-xs font-black uppercase tracking-widest rounded-lg transition-colors ${modeFilter === m ? 'bg-blue-600 text-white shadow' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                    {m}
                 </button>
             ))}
         </div>
-        <FilterControls 
-            selectedMonth={selectedMonth}
-            onMonthChange={onMonthChange}
-            selectedYear={selectedYear}
-            onYearChange={onYearChange}
-        />
+        <div className="flex gap-4">
+            <select value={selectedMonth} onChange={e => onMonthChange(parseInt(e.target.value))} className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-xs font-bold [color-scheme:light] outline-none focus:ring-2 focus:ring-blue-500">
+                <option value={-1}>All Months</option>
+                {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map((m, i) => <option key={i} value={i}>{m}</option>)}
+            </select>
+            <select value={selectedYear} onChange={e => onYearChange(parseInt(e.target.value))} className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-xs font-bold [color-scheme:light] outline-none focus:ring-2 focus:ring-blue-500">
+                <option value={0}>All Years</option>
+                {Array.from({length: 5}, (_, i) => new Date().getFullYear() - i).map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+        </div>
       </div>
 
-      <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8 overflow-x-auto">
-          {tabs.map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)} className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === tab ? 'border-green-600 text-green-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>{tab}</button>
+      <div className="border-b border-gray-200 overflow-x-auto no-scrollbar">
+        <nav className="-mb-px flex space-x-8 min-w-max">
+          {availableTabs.map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)} className={`whitespace-nowrap pb-4 px-1 border-b-2 font-black text-xs uppercase tracking-widest transition-colors ${activeTab === tab ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>{tab}</button>
           ))}
         </nav>
       </div>
 
       {renderDashboard()}
-
     </div>
   );
 };
