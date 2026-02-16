@@ -423,7 +423,7 @@ const DetailModal: React.FC<DetailModalProps> = ({ isOpen, onClose, item, role, 
                                 <p className="text-xs text-gray-500 uppercase font-semibold">eGFR</p>
                                 <div className="flex items-center gap-2">
                                     <p className="text-sm text-gray-900 font-medium">{item.egfr_text || '-'}</p>
-                                    {item.is_esrd && <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-black uppercase border border-red-200">ESRD</span>}
+                                    {item.is_esrd && <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-black uppercase border border-red-200">On Dialysis</span>}
                                 </div>
                             </div>
                         </div>
@@ -472,7 +472,7 @@ const DetailModal: React.FC<DetailModalProps> = ({ isOpen, onClose, item, role, 
                     <SelectableSection id="Personnel Involved" title="Accountability" className="bg-gray-50 p-4 rounded-lg border border-gray-100 col-span-full">
                         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                             <InfoItem label="Resident" value={item.resident_name} />
-                            <InfoItem label="Service" value={item.service_resident_name} />
+                            <InfoItem label="IDS Rotator" value={item.service_resident_name} />
                             <InfoItem label="Dept" value={item.clinical_dept} />
                             <InfoItem label="IDS Consultant" value={item.id_specialist} />
                             <InfoItem label="Pharmacist" value={item.dispensed_by} />

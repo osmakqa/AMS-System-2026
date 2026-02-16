@@ -272,7 +272,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     patient_name: '', hospital_number: '', patient_dob: '', age: '', sex: '', weight_kg: '', height_cm: '', ward: '',
     mode: 'adult' as 'adult' | 'pediatric',
     diagnosis: '', system_site: '', system_site_other: '', sgpt: '', scr_mgdl: '', scr_date: '', egfr_text: '',
-    is_esrd: false, // Internal state for ESRD checkbox
+    is_esrd: false, // Internal state for On Dialysis checkbox
     antimicrobial: '', drug_type: DrugType.MONITORED as DrugType, dose: '', frequency: '', duration: '',
     route: 'IV',
     route_other: '',
@@ -651,7 +651,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
 
     if (isRestricted) {
       if (!formData.service_resident_name || String(formData.service_resident_name).trim() === '') {
-        errors.service_resident_name = 'Service Resident is required for restricted antimicrobials.';
+        errors.service_resident_name = 'IDS Rotator (IM/Pedia) is required for restricted antimicrobials.';
       }
       if (!formData.id_specialist || String(formData.id_specialist).trim() === '') {
         errors.id_specialist = 'ID Specialist is required for restricted antimicrobials.';
@@ -961,7 +961,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                                         </label>
                                         <label className="flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
                                             <input type="checkbox" name="is_esrd" checked={formData.is_esrd} onChange={handleChange} className="rounded border-gray-300 text-red-600 h-4 w-4" />
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase">ESRD</span>
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase">On Dialysis</span>
                                         </label>
                                     </div>
                                 </div>
@@ -1064,7 +1064,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                         <FormGroup label="Clinical Department" error={validationErrors.clinical_dept}><Select id="clinical_dept" error={!!validationErrors.clinical_dept} name="clinical_dept" value={formData.clinical_dept} onChange={handleChange}><option value="">Select Dept</option>{CLINICAL_DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}</Select></FormGroup>
                         {formData.drug_type === DrugType.RESTRICTED && (
                             <>
-                                <FormGroup label="Service Resident" error={validationErrors.service_resident_name}><Input id="service_resident_name" error={!!validationErrors.service_resident_name} name="service_resident_name" value={formData.service_resident_name} onChange={handleChange} placeholder="IM/Pedia Resident" /></FormGroup>
+                                <FormGroup label="IDS Rotator (IM/Pedia)" error={validationErrors.service_resident_name}><Input id="service_resident_name" error={!!validationErrors.service_resident_name} name="service_resident_name" value={formData.service_resident_name} onChange={handleChange} placeholder="IM/Pedia Resident" /></FormGroup>
                                 <FormGroup label="ID Specialist" error={validationErrors.id_specialist}><Select id="id_specialist" error={!!validationErrors.id_specialist} name="id_specialist" value={formData.id_specialist} onChange={handleChange}><option value="">Select Specialist</option>{(patientMode === 'adult' ? IDS_SPECIALISTS_ADULT : IDS_SPECIALISTS_PEDIATRIC).map(s => <option key={s} value={s}>{s}</option>)}</Select></FormGroup>
                             </>
                         )}
@@ -1074,22 +1074,16 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
         </div>
 
         {/* Footer */}
-        <footer className="p-4 bg-white border-t border-gray-100 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 shrink-0 px-6 md:px-8">
-            <button 
-              type="button" 
-              onClick={handleClearAll} 
-              className="w-full md:w-auto px-6 py-2.5 text-red-600 hover:bg-red-50 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 border border-red-100 md:border-transparent"
-            >
+        <footer className="p-4 bg-white border-t border-gray-100 flex justify-end gap-3 shrink-0 px-8">
+            <button type="button" onClick={handleClearAll} className="mr-auto px-6 py-2.5 text-red-600 hover:bg-red-50 rounded-xl text-sm font-bold transition-all flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                 Clear All
             </button>
-            <div className="flex gap-2 w-full md:w-auto">
-                <button type="button" onClick={onClose} className="flex-1 md:flex-none px-6 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl text-sm font-bold transition-all border border-gray-200">Cancel</button>
-                <button type="button" onClick={openReview} disabled={loading} className="flex-[2] md:flex-none px-10 py-2.5 bg-[#009a3e] text-white rounded-xl text-sm font-bold shadow-lg hover:shadow-green-200 transition-all flex items-center justify-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    Review Request
-                </button>
-            </div>
+            <button type="button" onClick={onClose} className="px-6 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl text-sm font-bold transition-all">Cancel</button>
+            <button type="button" onClick={openReview} disabled={loading} className="px-10 py-2.5 bg-[#009a3e] text-white rounded-xl text-sm font-bold shadow-lg hover:shadow-green-200 transition-all flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                Review Request
+            </button>
         </footer>
 
         {/* Review Overlay */}
@@ -1129,7 +1123,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                                     </div>
                                     {formData.is_esrd && (
                                         <div className="inline-flex items-center px-3 py-1 rounded-full bg-red-100 text-red-800 text-[10px] font-black uppercase tracking-widest border border-red-200">
-                                            ESRD Status
+                                            On Dialysis Status
                                         </div>
                                     )}
                                 </div>
