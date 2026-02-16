@@ -117,6 +117,7 @@ function App() {
 
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedDay, setSelectedDay] = useState(new Date().toLocaleDateString('en-CA')); // YYYY-MM-DD
   const [historyStatusFilter, setHistoryStatusFilter] = useState<string>('All'); 
   const [historyAntimicrobialFilter, setHistoryAntimicrobialFilter] = useState<string>('All');
   const [historySearchQuery, setHistorySearchQuery] = useState<string>('');
@@ -173,6 +174,7 @@ function App() {
       setActiveTab('Pending');
     } else if (loggedInUser.role === UserRole.RESIDENT) {
       setActiveTab('Disapproved');
+      setSelectedDay(new Date().toLocaleDateString('en-CA'));
     } else {
       setActiveTab('Antimicrobials');
     }
@@ -369,7 +371,27 @@ function App() {
   const handleFormSubmission = async (formData: any) => {
     setIsSubmitting(true);
     try {
-      if (formData.id) {
+      // If Resident edits a form, we save it as a NEW request with a NEW ARF number
+      if (formData.id && user?.role === UserRole.RESIDENT) {
+          const payload = { ...formData };
+          delete payload.id; // Ensure it's treated as new
+          
+          const nextArf = await getNextArfNumber();
+          payload.arf_number = nextArf;
+          payload.status = PrescriptionStatus.PENDING;
+          payload.created_at = new Date().toISOString();
+          
+          // Clear metadata that shouldn't transfer to the new review cycle
+          payload.dispensed_date = null;
+          payload.dispensed_by = null;
+          payload.ids_approved_at = null;
+          payload.ids_disapproved_at = null;
+          payload.disapproved_reason = null;
+          payload.findings = [];
+
+          await createPrescription(payload);
+          alert("New request form and ARF# generated. Your request is now PENDING review.");
+      } else if (formData.id) {
           const payload = { ...formData };
           let newStatus: PrescriptionStatus | null = PrescriptionStatus.PENDING;
 
@@ -379,7 +401,6 @@ function App() {
               newStatus = null; 
 
               // 2. Strict Whitelist of Clinical/Patient fields to ensure "No Trace" of metadata changes
-              // Explicitly removed: req_date, created_at, timestamp, dispensed_date, ids_approved_at, ids_disapproved_at
               const fieldsToKeep = [
                   'patient_name', 'hospital_number', 'patient_dob', 'ward', 'age', 'sex', 
                   'weight_kg', 'height_cm', 'mode', 'diagnosis', 'system_site', 
@@ -443,7 +464,12 @@ function App() {
        items = items.filter(i => i.status !== PrescriptionStatus.DELETED);
     }
 
-    if (user?.role === UserRole.RESIDENT || activeTab !== 'Pending') {
+    if (user?.role === UserRole.RESIDENT) {
+      items = items.filter(item => {
+        const itemDate = item.req_date ? new Date(item.req_date).toLocaleDateString('en-CA') : '';
+        return itemDate === selectedDay;
+      });
+    } else if (activeTab !== 'Pending') {
       items = items.filter(item => {
         const itemDate = item.req_date ? new Date(item.req_date) : new Date(item.created_at || Date.now());
         const monthMatch = selectedMonth === -1 || itemDate.getMonth() === selectedMonth;
@@ -598,14 +624,28 @@ function App() {
                 )}
             </div>
             <div className="flex flex-col sm:flex-row gap-4 items-center">
-                <div className="flex items-center gap-2">
-                    <label className="text-xs font-semibold text-gray-500 uppercase">Month:</label>
-                    <select value={selectedMonth} onChange={(e) => setSelectedMonth(parseInt(e.target.value))} className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none shadow-sm [color-scheme:light]"><option value={-1}>All Months</option>{["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
-                </div>
-                <div className="flex items-center gap-2">
-                    <label className="text-xs font-semibold text-gray-500 uppercase">Year:</label>
-                    <select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none shadow-sm [color-scheme:light]"><option value={0}>All Years</option>{Array.from({length: 5}, (_, i) => new Date().getFullYear() - i).map((y) => <option key={y} value={y}>{y}</option>)}</select>
-                </div>
+                {user?.role === UserRole.RESIDENT ? (
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-semibold text-gray-500 uppercase">Filter Day:</label>
+                    <input 
+                        type="date" 
+                        value={selectedDay} 
+                        onChange={(e) => setSelectedDay(e.target.value)} 
+                        className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none shadow-sm [color-scheme:light]"
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-semibold text-gray-500 uppercase">Month:</label>
+                      <select value={selectedMonth} onChange={(e) => setSelectedMonth(parseInt(e.target.value))} className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none shadow-sm [color-scheme:light]"><option value={-1}>All Months</option>{["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-semibold text-gray-500 uppercase">Year:</label>
+                      <select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none shadow-sm [color-scheme:light]"><option value={0}>All Years</option>{Array.from({length: 5}, (_, i) => new Date().getFullYear() - i).map((y) => <option key={y} value={y}>{y}</option>)}</select>
+                    </div>
+                  </>
+                )}
             </div>
         </div>
 
