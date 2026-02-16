@@ -110,7 +110,7 @@ export interface Prescription {
   organisms?: Organism[]; 
   specimen?: string;
   culture_date?: string;
-  tentative_date?: string; // Added Tentative Date for tracking
+  tentative_date?: string; // Tracked as "Tentative Last Dose" in UI
 
   requested_by: string;
   dispensed_by?: string; 
