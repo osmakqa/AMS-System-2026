@@ -120,10 +120,10 @@ const PrescriptionTable: React.FC<PrescriptionTableProps> = ({ items, onAction, 
               <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider cursor-pointer select-none hover:bg-green-100" onClick={() => requestSort('patient_name')}>Patient {getSortIcon('patient_name')}</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider cursor-pointer select-none hover:bg-green-100" onClick={() => requestSort('ward')}>Ward {getSortIcon('ward')}</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider cursor-pointer select-none hover:bg-green-100" onClick={() => requestSort('antimicrobial')}>Antimicrobial {getSortIcon('antimicrobial')}</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider cursor-pointer select-none hover:bg-green-100" onClick={() => requestSort('status')}>Status {getSortIcon('status')}</th>
               {isHistoryView && (
                 <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider">Tentative Date</th>
               )}
+              <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider cursor-pointer select-none hover:bg-green-100" onClick={() => requestSort('status')}>Status {getSortIcon('status')}</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:bg-green-100" onClick={() => requestSort('resident_name')}>In-Charge {getSortIcon('resident_name')}</th>
               {!isHistoryView && (
                 <th className="px-6 py-3 text-right text-xs font-medium text-green-800 uppercase tracking-wider">Actions</th>
@@ -211,11 +211,6 @@ const PrescriptionTable: React.FC<PrescriptionTableProps> = ({ items, onAction, 
                         </span>
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${getStatusColor(item.status)}`}>
-                      {formatStatus(item.status)}
-                    </span>
-                  </td>
 
                   {isHistoryView && (
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -250,6 +245,12 @@ const PrescriptionTable: React.FC<PrescriptionTableProps> = ({ items, onAction, 
                       )}
                     </td>
                   )}
+
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${getStatusColor(item.status)}`}>
+                      {formatStatus(item.status)}
+                    </span>
+                  </td>
 
                   <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDeleted ? 'text-gray-400' : 'text-gray-500'}`}>{item.resident_name || item.requested_by}</td>
                   
