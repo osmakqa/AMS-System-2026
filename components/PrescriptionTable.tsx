@@ -7,14 +7,16 @@ interface PrescriptionTableProps {
   onAction: (id: string, action: ActionType, payload?: any) => void;
   onView: (item: Prescription) => void;
   onUpdateWard?: (id: string, newWard: string) => void;
+  onUpdateTentativeDate?: (id: string, newDate: string) => void;
   statusType: PrescriptionStatus | 'ALL_VIEW';
   isHistoryView?: boolean;
 }
 
-const PrescriptionTable: React.FC<PrescriptionTableProps> = ({ items, onAction, onView, onUpdateWard, statusType, isHistoryView = false }) => {
+const PrescriptionTable: React.FC<PrescriptionTableProps> = ({ items, onAction, onView, onUpdateWard, onUpdateTentativeDate, statusType, isHistoryView = false }) => {
   // Use arf_number or request_number as the primary sort key
   const [sortConfig, setSortConfig] = useState<{ key: keyof Prescription | 'req_date' | 'request_number' | 'arf_number', direction: 'asc' | 'desc' }>({ key: 'request_number', direction: 'desc' });
   const [editingWardId, setEditingWardId] = useState<string | null>(null);
+  const [editingTentativeId, setEditingTentativeId] = useState<string | null>(null);
 
   const sortedItems = useMemo(() => {
     let sortableItems = [...items];
@@ -119,6 +121,9 @@ const PrescriptionTable: React.FC<PrescriptionTableProps> = ({ items, onAction, 
               <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider cursor-pointer select-none hover:bg-green-100" onClick={() => requestSort('ward')}>Ward {getSortIcon('ward')}</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider cursor-pointer select-none hover:bg-green-100" onClick={() => requestSort('antimicrobial')}>Antimicrobial {getSortIcon('antimicrobial')}</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider cursor-pointer select-none hover:bg-green-100" onClick={() => requestSort('status')}>Status {getSortIcon('status')}</th>
+              {isHistoryView && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-green-800 uppercase tracking-wider">Tentative Date</th>
+              )}
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:bg-green-100" onClick={() => requestSort('resident_name')}>In-Charge {getSortIcon('resident_name')}</th>
               {!isHistoryView && (
                 <th className="px-6 py-3 text-right text-xs font-medium text-green-800 uppercase tracking-wider">Actions</th>
@@ -211,6 +216,41 @@ const PrescriptionTable: React.FC<PrescriptionTableProps> = ({ items, onAction, 
                       {formatStatus(item.status)}
                     </span>
                   </td>
+
+                  {isHistoryView && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                       {editingTentativeId === item.id ? (
+                        <input
+                          type="date"
+                          autoFocus
+                          className="bg-white border border-blue-500 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-blue-500 outline-none [color-scheme:light]"
+                          value={item.tentative_date || ''}
+                          onBlur={() => setEditingTentativeId(null)}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => {
+                            onUpdateTentativeDate?.(item.id, e.target.value);
+                            setEditingTentativeId(null);
+                          }}
+                        />
+                      ) : (
+                        <div 
+                          className="cursor-pointer hover:text-blue-600 hover:underline flex items-center gap-1 group"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!isDeleted) setEditingTentativeId(item.id);
+                          }}
+                        >
+                          <span className={isDeleted ? 'text-gray-400' : ''}>{item.tentative_date ? new Date(item.tentative_date).toLocaleDateString() : <span className="text-gray-300 italic">Set Date</span>}</span>
+                          {!isDeleted && (
+                            <svg className="h-3 w-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  )}
+
                   <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDeleted ? 'text-gray-400' : 'text-gray-500'}`}>{item.resident_name || item.requested_by}</td>
                   
                   {!isHistoryView && (

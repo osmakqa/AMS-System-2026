@@ -109,6 +109,8 @@ export interface Prescription {
   previous_antibiotics?: PreviousAntibiotic[]; 
   organisms?: Organism[]; 
   specimen?: string;
+  culture_date?: string;
+  tentative_date?: string; // Added Tentative Date for tracking
 
   requested_by: string;
   dispensed_by?: string; 

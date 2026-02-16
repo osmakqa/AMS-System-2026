@@ -282,6 +282,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     basis_indication_details: '', // New internal field
     selectedIndicationType: '' as 'Empiric' | 'Prophylactic' | 'Therapeutic' | '',
     specimen: '',
+    culture_date: '',
     resident_name: '', clinical_dept: '', service_resident_name: '', id_specialist: '',
   });
 
@@ -332,6 +333,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
       basis_indication_details: '',
       selectedIndicationType: '' as 'Empiric' | 'Prophylactic' | 'Therapeutic' | '',
       specimen: '',
+      culture_date: '',
       resident_name: '', clinical_dept: '', service_resident_name: '', id_specialist: '',
     });
     setPrevAbxRows([{ id: 0, drug: '', frequency: '', duration: '' }]);
@@ -367,7 +369,9 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
         basis_indication_details: details,
         system_site: initialData.system_site || '',
         system_site_other: initialData.system_site_other || '',
-        is_esrd: initialData.is_esrd || false
+        is_esrd: initialData.is_esrd || false,
+        culture_date: initialData.culture_date || '',
+        specimen: initialData.specimen || ''
       });
 
       if (initialData.scr_mgdl === "Pending") setScrNotAvailable(true);
@@ -606,6 +610,26 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
         errors[field as string] = `${String(field).replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} is required.`;
       }
     });
+
+    if (formData.selectedIndicationType === 'Therapeutic') {
+      if (!formData.specimen || formData.specimen.trim() === '') {
+        errors.specimen = 'Specimen source is required for Therapeutic indication.';
+      }
+      if (!formData.culture_date) {
+        errors.culture_date = 'Culture date is required for Therapeutic indication.';
+      }
+      const validOrgs = organismBlocks.filter(b => b.name && b.name.trim() !== '');
+      if (validOrgs.length === 0) {
+        errors.organisms = 'At least one organism name is required for Therapeutic indication.';
+      } else {
+        const hasMissingSusceptibility = validOrgs.some(org => 
+            org.susceptibilities.filter(s => s.drug && s.drug.trim() !== '').length === 0
+        );
+        if (hasMissingSusceptibility) {
+            errors.organisms = 'At least one susceptibility antibiotic is required for each organism in Therapeutic indication.';
+        }
+      }
+    }
 
     if (formData.selectedBasisCategory === 'Others (Specify)' && !formData.basis_indication_details.trim()) {
       errors.basis_indication_details = 'Please specify the clinical justification.';
@@ -1004,7 +1028,11 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg> Add Organism
                             </button>
                         </div>
-                        <FormGroup label="Specimen Source"><Input name="specimen" value={formData.specimen} onChange={handleChange} placeholder="e.g. Blood, Urine, Sputum" /></FormGroup>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <FormGroup label="Specimen Source" error={validationErrors.specimen}><Input id="specimen" error={!!validationErrors.specimen} name="specimen" value={formData.specimen} onChange={handleChange} placeholder="e.g. Blood, Urine, Sputum" /></FormGroup>
+                            <FormGroup label="Culture Date" error={validationErrors.culture_date}><Input id="culture_date" error={!!validationErrors.culture_date} type="date" name="culture_date" value={formData.culture_date} onChange={handleChange} max={getTodayDate()} /></FormGroup>
+                        </div>
+                        {validationErrors.organisms && <p className="text-[10px] text-red-500 font-bold mt-2 uppercase">{validationErrors.organisms}</p>}
                         <div className="mt-3 space-y-3">
                             {organismBlocks.map(block => (
                                 <OrganismBlock key={block.id} id={block.id} value={block} onChange={updateOrganismBlock} onRemove={removeOrganismBlock} />
@@ -1074,16 +1102,22 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
         </div>
 
         {/* Footer */}
-        <footer className="p-4 bg-white border-t border-gray-100 flex justify-end gap-3 shrink-0 px-8">
-            <button type="button" onClick={handleClearAll} className="mr-auto px-6 py-2.5 text-red-600 hover:bg-red-50 rounded-xl text-sm font-bold transition-all flex items-center gap-2">
+        <footer className="p-4 bg-white border-t border-gray-100 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 shrink-0 px-6 md:px-8">
+            <button 
+              type="button" 
+              onClick={handleClearAll} 
+              className="w-full md:w-auto px-6 py-2.5 text-red-600 hover:bg-red-50 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 border border-red-100 md:border-transparent"
+            >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                 Clear All
             </button>
-            <button type="button" onClick={onClose} className="px-6 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl text-sm font-bold transition-all">Cancel</button>
-            <button type="button" onClick={openReview} disabled={loading} className="px-10 py-2.5 bg-[#009a3e] text-white rounded-xl text-sm font-bold shadow-lg hover:shadow-green-200 transition-all flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                Review Request
-            </button>
+            <div className="flex gap-2 w-full md:w-auto">
+                <button type="button" onClick={onClose} className="flex-1 md:flex-none px-6 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl text-sm font-bold transition-all border border-gray-200">Cancel</button>
+                <button type="button" onClick={openReview} disabled={loading} className="flex-[2] md:flex-none px-10 py-2.5 bg-[#009a3e] text-white rounded-xl text-sm font-bold shadow-lg hover:shadow-green-200 transition-all flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    Review Request
+                </button>
+            </div>
         </footer>
 
         {/* Review Overlay */}
@@ -1093,7 +1127,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                     <header className="bg-[#009a3e] text-white p-6 flex justify-between items-center shrink-0">
                         <div className="flex items-center gap-4">
                             <div className="bg-white/20 p-2.5 rounded-xl backdrop-blur-md border border-white/10">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
                             </div>
                             <div>
                                 <h3 className="text-xl font-black uppercase tracking-tight">Final Verification</h3>
@@ -1151,8 +1185,8 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                                         </div>
                                     </div>
                                     <div>
-                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Specimen</p>
-                                        <p className="text-sm font-bold text-gray-800">{formData.specimen || 'Not specified'}</p>
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Specimen & Culture</p>
+                                        <p className="text-sm font-bold text-gray-800">{formData.specimen || 'Not specified'}{formData.culture_date && ` (Date: ${new Date(formData.culture_date).toLocaleDateString()})`}</p>
                                     </div>
                                     <div>
                                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Organisms</p>

@@ -198,6 +198,14 @@ function App() {
     }
   };
 
+  const handleUpdateTentativeDate = async (id: string, newDate: string) => {
+    try {
+      await updatePrescriptionStatus(id, null, { tentative_date: newDate });
+    } catch (err: any) {
+      alert("Failed to update tentative date: " + err.message);
+    }
+  };
+
   const handleActionClick = (id: string, type: ActionType, payload?: any) => {
     if (payload?.findings && (type === ActionType.DISAPPROVE || type === ActionType.APPROVE || type === ActionType.SAVE_FINDINGS)) {
         executeAction(id, type, { findings: payload.findings });
@@ -710,7 +718,7 @@ function App() {
         if (historyStatusFilter === 'Approved') tableStatusType = PrescriptionStatus.APPROVED;
         if (historyStatusFilter === 'Disapproved') tableStatusType = PrescriptionStatus.DISAPPROVED;
         if (historyStatusFilter === 'For IDS Approval') tableStatusType = PrescriptionStatus.FOR_IDS_APPROVAL;
-        return <PrescriptionTable items={viewData} onAction={handleActionClick} onView={handleViewDetails} onUpdateWard={handleUpdateWard} statusType={tableStatusType} isHistoryView={true} />;
+        return <PrescriptionTable items={viewData} onAction={handleActionClick} onView={handleViewDetails} onUpdateWard={handleUpdateWard} onUpdateTentativeDate={handleUpdateTentativeDate} statusType={tableStatusType} isHistoryView={true} />;
       case 'Data Analysis':
         const activeData = data.filter(i => i.status !== PrescriptionStatus.DELETED);
         return <StatsChart data={activeData} allData={activeData} auditData={auditData} monitoringData={monitoringData} role={user?.role} selectedMonth={selectedMonth} onMonthChange={setSelectedMonth} selectedYear={selectedYear} onYearChange={setSelectedYear} />;
@@ -797,7 +805,7 @@ function App() {
                    </div>
                </div>
              </div>
-             <PrescriptionTable items={amsItems} onAction={handleActionClick} onView={handleViewDetails} onUpdateWard={handleUpdateWard} statusType={'ALL_VIEW'} />
+             <PrescriptionTable items={amsItems} onAction={handleActionClick} onView={handleViewDetails} onUpdateWard={handleUpdateWard} onUpdateTentativeDate={handleUpdateTentativeDate} statusType={'ALL_VIEW'} />
            </div>
          );
       default: return null;
