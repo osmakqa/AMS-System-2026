@@ -36,7 +36,7 @@ const tabsConfig: Record<UserRole, string[]> = {
   [UserRole.PHARMACIST]: ['Pending', 'History', 'AMS Monitoring', 'Data Analysis'], 
   [UserRole.IDS]: ['Pending', 'History'],
   [UserRole.AMS_ADMIN]: ['Antimicrobials', 'AMS Audit', 'Data Analysis', 'Password Manager'],
-  [UserRole.RESIDENT]: ['Disapproved'],
+  [UserRole.RESIDENT]: ['Disapproved', 'Data Analysis'],
   [UserRole.NURSE]: ['Pending'],
 };
 
@@ -473,7 +473,7 @@ function App() {
        items = items.filter(i => i.status !== PrescriptionStatus.DELETED);
     }
 
-    if (user?.role === UserRole.RESIDENT) {
+    if (user?.role === UserRole.RESIDENT && activeTab !== 'Data Analysis') {
       items = items.filter(item => {
         const itemDate = item.req_date ? new Date(item.req_date).toLocaleDateString('en-CA') : '';
         return itemDate === selectedDay;
@@ -651,7 +651,7 @@ function App() {
                   </div>
                 )}
             </div>
-            {!isNursePending && (
+            {activeTab !== 'Data Analysis' && !isNursePending && (
               <div className="flex flex-col sm:flex-row gap-4 items-center">
                   {user?.role === UserRole.RESIDENT ? (
                     <div className="flex items-center gap-2">
@@ -861,7 +861,7 @@ function App() {
                    </div>
                    <div className="flex flex-col gap-1">
                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Ward / Area</span>
-                       <select value={historyWardFilter} onChange={e => setHistoryWardFilter(e.target.value)} className="w-full bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none [color-scheme:light]">
+                       <select value={historyWardFilter} onChange={e => setHistoryWardFilter(e.target.value)} className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none [color-scheme:light]">
                             <option value="All">All Wards</option>
                             {wards.map(v => <option key={v} value={v}>{v}</option>)}
                        </select>

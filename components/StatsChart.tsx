@@ -289,7 +289,8 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <ChartWrapper title="Department Breakdown (Census)">
                     <ResponsiveContainer>
-                        <BarChart data={g.deptCensus} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('clinical_dept', e.activeLabel, generalSource)}>
+                        {/* Fix: Wrapped e.activeLabel in String() to match expected parameter type */}
+                        <BarChart data={g.deptCensus} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('clinical_dept', String(e.activeLabel), generalSource)}>
                             <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                             <XAxis type="number" />
                             <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={110} cursor="pointer" />
@@ -300,7 +301,8 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
                 </ChartWrapper>
                 <ChartWrapper title="Ward Breakdown (Census)">
                     <ResponsiveContainer>
-                        <BarChart data={g.wardCensus} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('ward', e.activeLabel, generalSource)}>
+                        {/* Fix: Wrapped e.activeLabel in String() to match expected parameter type */}
+                        <BarChart data={g.wardCensus} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('ward', String(e.activeLabel), generalSource)}>
                             <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                             <XAxis type="number" />
                             <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={110} cursor="pointer" />
@@ -313,7 +315,8 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
 
             <ChartWrapper title={`${generalDrugFilter} Antimicrobial Census (All Statuses)`}>
                 <ResponsiveContainer>
-                    <BarChart data={g.antimicrobialCensus} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('antimicrobial', e.activeLabel, generalSource)}>
+                    {/* Fix: Wrapped e.activeLabel in String() to match expected parameter type */}
+                    <BarChart data={g.antimicrobialCensus} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('antimicrobial', String(e.activeLabel), generalSource)}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                         <XAxis type="number" />
                         <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={110} cursor="pointer" />
@@ -326,7 +329,8 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <ChartWrapper title="Top 5 Antimicrobials (Approved)">
                     <ResponsiveContainer>
-                        <BarChart data={g.topAntimicrobials} layout="vertical" margin={{ left: 100 }} onClick={(e) => e && e.activeLabel && handleDrillDown('antimicrobial', e.activeLabel, approvedData)}>
+                        {/* Fix: Wrapped e.activeLabel in String() to match expected parameter type */}
+                        <BarChart data={g.topAntimicrobials} layout="vertical" margin={{ left: 100 }} onClick={(e) => e && e.activeLabel && handleDrillDown('antimicrobial', String(e.activeLabel), approvedData)}>
                             <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                             <XAxis type="number" />
                             <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={100} cursor="pointer"/>
@@ -358,7 +362,8 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
             
             <ChartWrapper title="Detailed System / Site Breakdown (Approved)" heightClass="h-[600px]">
                 <ResponsiveContainer>
-                    <BarChart data={g.systemSiteData} layout="vertical" margin={{ left: 150 }} onClick={(e) => e && e.activeLabel && handleDrillDown('system_site_match', e.activeLabel, approvedData)}>
+                    {/* Fix: Wrapped e.activeLabel in String() to match expected parameter type */}
+                    <BarChart data={g.systemSiteData} layout="vertical" margin={{ left: 150 }} onClick={(e) => e && e.activeLabel && handleDrillDown('system_site_match', String(e.activeLabel), approvedData)}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                         <XAxis type="number" />
                         <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={140} cursor="pointer" />
@@ -370,7 +375,8 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
 
             <ChartWrapper title="Intervention Findings (All Categories)">
                 <ResponsiveContainer>
-                    <BarChart data={g.interventions} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('finding_category', e.activeLabel, generalSource)}>
+                    {/* Fix: Wrapped e.activeLabel in String() to match expected parameter type */}
+                    <BarChart data={g.interventions} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('finding_category', String(e.activeLabel), generalSource)}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                         <XAxis type="number" />
                         <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={110} cursor="pointer" />
@@ -395,12 +401,13 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <KpiCard title="Total Disapproved" value={d.total} color="bg-red-100 text-red-700" icon={<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>} onClick={() => handleDrillDown('status', 'disapproved')}/>
                 <Top5List title="Top 5 Departments" data={d.topDepts} color="bg-red-600" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: disapprovedData, title: 'Disapproved by Dept'})}/>
-                <Top5List title="Top 5 Wards" data={d.topWards} color="bg-red-500" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: disapprovedData, title: 'Disapproved by Ward'})}/>
+                <Top5List title="Top 5 Wards" data={d.topWards} color="bg-red-50" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: disapprovedData, title: 'Disapproved by Ward'})}/>
                 <Top5List title="Top 5 Antimicrobials" data={d.topDrugs} color="bg-red-400" icon={<></>} onClick={() => setModalConfig({isOpen: true, data: disapprovedData, title: 'Disapproved by Drug'})}/>
             </div>
             <ChartWrapper title="Reason for Disapproval Breakdown">
                 <ResponsiveContainer>
-                    <BarChart data={d.interventions} layout="vertical" margin={{ left: 150 }} onClick={(e) => e && e.activeLabel && handleDrillDown('finding_category', e.activeLabel, disapprovedData)}>
+                    {/* Fix: Wrapped e.activeLabel in String() to match expected parameter type */}
+                    <BarChart data={d.interventions} layout="vertical" margin={{ left: 150 }} onClick={(e) => e && e.activeLabel && handleDrillDown('finding_category', String(e.activeLabel), disapprovedData)}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                         <XAxis type="number" />
                         <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={140} cursor="pointer" />
@@ -424,7 +431,8 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
             </div>
             <ChartWrapper title="Pharmacist Activity (Total Actions)">
                 <ResponsiveContainer>
-                    <BarChart data={p.topPharmacists} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('dispensed_by', e.activeLabel)}>
+                    {/* Fix: Wrapped e.activeLabel in String() to match expected parameter type */}
+                    <BarChart data={p.topPharmacists} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('dispensed_by', String(e.activeLabel))}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                         <XAxis type="number" />
                         <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={110} cursor="pointer" />
@@ -444,7 +452,8 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
                 }
             >
                 <ResponsiveContainer>
-                    <BarChart data={aiOthersData.length > 0 ? aiOthersData : p.interventions} layout="vertical" margin={{ left: 150 }} onClick={(e) => e && e.activeLabel && handleDrillDown('finding_category', e.activeLabel)}>
+                    {/* Fix: Wrapped e.activeLabel in String() to match expected parameter type */}
+                    <BarChart data={aiOthersData.length > 0 ? aiOthersData : p.interventions} layout="vertical" margin={{ left: 150 }} onClick={(e) => e && e.activeLabel && handleDrillDown('finding_category', String(e.activeLabel))}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                         <XAxis type="number" />
                         <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fontWeight: 'bold' }} width={140} cursor="pointer" />
@@ -481,7 +490,8 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <ChartWrapper title="Pending Requests per IDS">
                         <ResponsiveContainer>
-                            <BarChart data={ids.pendingPerIds} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('ids_specialist_match', e.activeLabel, modeFilteredData.filter(i => i.status === PrescriptionStatus.FOR_IDS_APPROVAL))}>
+                            {/* Fix: Wrapped e.activeLabel in String() to match expected parameter type */}
+                            <BarChart data={ids.pendingPerIds} layout="vertical" margin={{ left: 120 }} onClick={(e) => e && e.activeLabel && handleDrillDown('ids_specialist_match', String(e.activeLabel), modeFilteredData.filter(i => i.status === PrescriptionStatus.FOR_IDS_APPROVAL))}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                                 <XAxis type="number" />
                                 <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={110} cursor="pointer" />
@@ -504,7 +514,8 @@ const StatsChart: React.FC<StatsChartProps> = ({ data, allData, auditData = [], 
                 </div>
                 <ChartWrapper title="IDS Decision Outcomes per Specialist">
                     <ResponsiveContainer>
-                        <BarChart data={ids.outcomesPerIds} margin={{ top: 20, right: 30, left: 20, bottom: 5 }} onClick={(e) => e && e.activeLabel && handleDrillDown('ids_specialist_match', e.activeLabel, idsConsults)}>
+                        {/* Fix: Wrapped e.activeLabel in String() to match expected parameter type */}
+                        <BarChart data={ids.outcomesPerIds} margin={{ top: 20, right: 30, left: 20, bottom: 5 }} onClick={(e) => e && e.activeLabel && handleDrillDown('ids_specialist_match', String(e.activeLabel), idsConsults)}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} />
                             <XAxis dataKey="name" tick={{fontSize: 10}} cursor="pointer" />
                             <YAxis />
