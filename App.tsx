@@ -37,6 +37,7 @@ const tabsConfig: Record<UserRole, string[]> = {
   [UserRole.IDS]: ['Pending', 'History'],
   [UserRole.AMS_ADMIN]: ['Antimicrobials', 'AMS Audit', 'Data Analysis', 'Password Manager'],
   [UserRole.RESIDENT]: ['Disapproved'],
+  [UserRole.NURSE]: ['Pending'],
 };
 
 const TabIcon = ({ tabName }: { tabName: string }) => {
@@ -129,6 +130,9 @@ function App() {
   const [historyDeptFilter, setHistoryDeptFilter] = useState<string>('All');
   const [historyModeFilter, setHistoryModeFilter] = useState<string>('All');
 
+  // Specific filter for Nurse role
+  const [nurseWardFilter, setNurseWardFilter] = useState<string>('All');
+
   // --- Real-time Listeners (Firebase Replacement) ---
   useEffect(() => {
     if (!user) return;
@@ -170,7 +174,7 @@ function App() {
 
   const handleLogin = (loggedInUser: User) => {
     setUser(loggedInUser);
-    if (loggedInUser.role === UserRole.IDS || loggedInUser.role === UserRole.PHARMACIST) {
+    if (loggedInUser.role === UserRole.IDS || loggedInUser.role === UserRole.PHARMACIST || loggedInUser.role === UserRole.NURSE) {
       setActiveTab('Pending');
     } else if (loggedInUser.role === UserRole.RESIDENT) {
       setActiveTab('Disapproved');
@@ -186,6 +190,7 @@ function App() {
     setAuditData([]);
     setMonitoringData([]);
     setDbError(null);
+    setNurseWardFilter('All');
   };
 
   const handleViewDetails = (item: Prescription) => {
@@ -209,6 +214,9 @@ function App() {
   };
 
   const handleActionClick = (id: string, type: ActionType, payload?: any) => {
+    // Nurses cannot perform actions
+    if (user?.role === UserRole.NURSE) return;
+
     if (payload?.findings && (type === ActionType.DISAPPROVE || type === ActionType.APPROVE || type === ActionType.SAVE_FINDINGS)) {
         executeAction(id, type, { findings: payload.findings });
         return;
@@ -283,6 +291,7 @@ function App() {
     // LEGACY LOGIC
     if (u.role === UserRole.AMS_ADMIN) return 'ams123';
     if (u.role === UserRole.RESIDENT) return 'doctor123';
+    if (u.role === UserRole.NURSE) return 'osmaknurse';
     if (u.role === UserRole.PHARMACIST) {
       const lastName = u.name.split(',')[0].trim().toLowerCase().replace(/\s/g, '');
       return `${lastName}123`;
@@ -521,9 +530,14 @@ function App() {
       return items;
     }
     
-    if (user?.role === UserRole.PHARMACIST) {
+    if (user?.role === UserRole.PHARMACIST || user?.role === UserRole.NURSE) {
       switch (activeTab) {
-        case 'Pending': return items.filter(i => statusMatches(i.status, PrescriptionStatus.PENDING));
+        case 'Pending': 
+          let pItems = items.filter(i => statusMatches(i.status, PrescriptionStatus.PENDING));
+          if (user.role === UserRole.NURSE && nurseWardFilter !== 'All') {
+            pItems = pItems.filter(i => i.ward === nurseWardFilter);
+          }
+          return pItems;
       }
     }
     
@@ -552,7 +566,8 @@ function App() {
   };
   
   const FilterHeader = () => {
-    const showFilters = user?.role === UserRole.RESIDENT || 
+    const isNursePending = user?.role === UserRole.NURSE && activeTab === 'Pending';
+    const showFilters = isNursePending || user?.role === UserRole.RESIDENT || 
         (user?.role !== UserRole.AMS_ADMIN && activeTab !== 'Pending' && activeTab !== 'Data Analysis' && activeTab !== 'AMS Monitoring' && activeTab !== 'Password Manager') || 
         (user?.role === UserRole.AMS_ADMIN && (activeTab !== 'Data Analysis' && activeTab !== 'AMS Audit' && activeTab !== 'Password Manager'));
 
@@ -622,31 +637,46 @@ function App() {
                         </div>
                     </div>
                 )}
-            </div>
-            <div className="flex flex-col sm:flex-row gap-4 items-center">
-                {user?.role === UserRole.RESIDENT ? (
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs font-semibold text-gray-500 uppercase">Filter Day:</label>
-                    <input 
-                        type="date" 
-                        value={selectedDay} 
-                        onChange={(e) => setSelectedDay(e.target.value)} 
-                        className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none shadow-sm [color-scheme:light]"
-                    />
+                {isNursePending && (
+                  <div className="flex items-center gap-2 border-l pl-4 border-gray-200">
+                    <label className="text-xs font-semibold text-gray-500 uppercase">Ward Filter:</label>
+                    <select
+                        value={nurseWardFilter}
+                        onChange={(e) => setNurseWardFilter(e.target.value)}
+                        className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none [color-scheme:light]"
+                    >
+                        <option value="All">All Wards</option>
+                        {WARDS.map(w => <option key={w} value={w}>{w}</option>)}
+                    </select>
                   </div>
-                ) : (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs font-semibold text-gray-500 uppercase">Month:</label>
-                      <select value={selectedMonth} onChange={(e) => setSelectedMonth(parseInt(e.target.value))} className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none shadow-sm [color-scheme:light]"><option value={-1}>All Months</option>{["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs font-semibold text-gray-500 uppercase">Year:</label>
-                      <select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none shadow-sm [color-scheme:light]"><option value={0}>All Years</option>{Array.from({length: 5}, (_, i) => new Date().getFullYear() - i).map((y) => <option key={y} value={y}>{y}</option>)}</select>
-                    </div>
-                  </>
                 )}
             </div>
+            {!isNursePending && (
+              <div className="flex flex-col sm:flex-row gap-4 items-center">
+                  {user?.role === UserRole.RESIDENT ? (
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-semibold text-gray-500 uppercase">Filter Day:</label>
+                      <input 
+                          type="date" 
+                          value={selectedDay} 
+                          onChange={(e) => setSelectedDay(e.target.value)} 
+                          className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none shadow-sm [color-scheme:light]"
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs font-semibold text-gray-500 uppercase">Month:</label>
+                        <select value={selectedMonth} onChange={(e) => setSelectedMonth(parseInt(e.target.value))} className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none shadow-sm [color-scheme:light]"><option value={-1}>All Months</option>{["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs font-semibold text-gray-500 uppercase">Year:</label>
+                        <select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none shadow-sm [color-scheme:light]"><option value={0}>All Years</option>{Array.from({length: 5}, (_, i) => new Date().getFullYear() - i).map((y) => <option key={y} value={y}>{y}</option>)}</select>
+                      </div>
+                    </>
+                  )}
+              </div>
+            )}
         </div>
 
         {activeTab === 'History' && (
@@ -736,7 +766,7 @@ function App() {
     const viewData = getFilteredDataForCurrentView();
 
     if (activeTab === 'Pending' || (user?.role === UserRole.RESIDENT && activeTab === 'Disapproved')) {
-        const titleMap: any = { PHARMACIST: 'Pending Requests', IDS: 'Pending for IDS Approval', RESIDENT: 'Disapproved Requests' };
+        const titleMap: any = { PHARMACIST: 'Pending Requests', IDS: 'Pending for IDS Approval', RESIDENT: 'Disapproved Requests', NURSE: 'Pending Units Surveillance' };
         return (
           <div>
              <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6">

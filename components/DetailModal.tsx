@@ -135,12 +135,13 @@ const DetailModal: React.FC<DetailModalProps> = ({ isOpen, onClose, item, role, 
   const [mobileTab, setMobileTab] = useState<'details' | 'review'>('details');
 
   const isReviewer = role === UserRole.PHARMACIST || role === UserRole.AMS_ADMIN || role === UserRole.IDS;
+  const isNurse = role === UserRole.NURSE;
   const findingsToDisplay = isReviewer ? findings : (item?.findings || []);
 
   useEffect(() => {
     let active = true;
     const checkDose = async () => {
-      const shouldCheck = role === UserRole.PHARMACIST || role === UserRole.AMS_ADMIN || role === UserRole.IDS;
+      const shouldCheck = role === UserRole.PHARMACIST || role === UserRole.AMS_ADMIN || role === UserRole.IDS || role === UserRole.NURSE;
       
       if (item && item.mode === 'pediatric' && shouldCheck) {
         setIsCheckingDose(true);
@@ -478,6 +479,7 @@ const DetailModal: React.FC<DetailModalProps> = ({ isOpen, onClose, item, role, 
                             <InfoItem label="IDS Consultant" value={item.id_specialist} />
                             <InfoItem label="Pharmacist" value={item.dispensed_by} />
                         </div>
+                    {/* Fixed typo in closing tag from SectionWrapper to SelectableSection */}
                     </SelectableSection>
                 </div>
 

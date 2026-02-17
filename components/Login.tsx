@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { PHARMACISTS, IDS_SPECIALISTS, LOGO_URL } from '../constants';
 import { User, UserRole } from '../types';
@@ -13,7 +12,7 @@ interface LoginProps {
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin, onOpenManual, onOpenWorkflow, onOpenAntimicrobialRequestForm, onOpenAuditForm }) => {
-  const [role, setRole] = useState<'PHARMACIST' | 'IDS' | 'AMS' | 'RESIDENT'>('PHARMACIST');
+  const [role, setRole] = useState<'PHARMACIST' | 'IDS' | 'AMS' | 'RESIDENT' | 'NURSE'>('PHARMACIST');
   const [selectedUser, setSelectedUser] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -29,13 +28,14 @@ const Login: React.FC<LoginProps> = ({ onLogin, onOpenManual, onOpenWorkflow, on
 
   const getExpectedPassword = () => {
     // 1. Check if user exists in Firestore with a custom password
-    const userId = (role === 'AMS') ? 'ams-admin' : (role === 'RESIDENT' ? 'resident' : selectedUser);
+    const userId = (role === 'AMS') ? 'ams-admin' : (role === 'RESIDENT' ? 'resident' : (role === 'NURSE' ? 'nurse' : selectedUser));
     const dbUser = usersDb.find(u => u.id === userId);
     if (dbUser && dbUser.password) return dbUser.password;
 
     // 2. Legacy hardcoded logic
     if (role === 'AMS') return 'ams123';
     if (role === 'RESIDENT') return 'doctor123';
+    if (role === 'NURSE') return 'osmaknurse';
     
     if (role === 'PHARMACIST' && selectedUser) {
       const lastName = selectedUser.split(',')[0].trim().toLowerCase().replace(/\s/g, '');
@@ -55,7 +55,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onOpenManual, onOpenWorkflow, on
     e.preventDefault();
     setError('');
 
-    if (role !== 'AMS' && role !== 'RESIDENT' && !selectedUser) {
+    if (role !== 'AMS' && role !== 'RESIDENT' && role !== 'NURSE' && !selectedUser) {
         setError('Please select a user');
         return;
     }
@@ -66,7 +66,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onOpenManual, onOpenWorkflow, on
       return;
     }
 
-    const userId = (role === 'AMS') ? 'ams-admin' : (role === 'RESIDENT' ? 'resident' : selectedUser);
+    const userId = (role === 'AMS') ? 'ams-admin' : (role === 'RESIDENT' ? 'resident' : (role === 'NURSE' ? 'nurse' : selectedUser));
     const dbUser = usersDb.find(u => u.id === userId);
 
     if (role === 'AMS') {
@@ -76,6 +76,11 @@ const Login: React.FC<LoginProps> = ({ onLogin, onOpenManual, onOpenWorkflow, on
 
     if (role === 'RESIDENT') {
        onLogin(dbUser || { id: 'resident', name: 'Resident', role: UserRole.RESIDENT });
+       return;
+    }
+
+    if (role === 'NURSE') {
+       onLogin(dbUser || { id: 'nurse', name: 'Nurse', role: UserRole.NURSE });
        return;
     }
 
@@ -101,34 +106,41 @@ const Login: React.FC<LoginProps> = ({ onLogin, onOpenManual, onOpenWorkflow, on
         {/* Form Body */}
         <div className="p-8">
           {/* Role Selection Tabs */}
-          <div className="flex bg-gray-100 p-1 rounded-lg mb-6 overflow-x-auto">
+          <div className="flex bg-gray-100 p-1 rounded-lg mb-6 overflow-x-auto no-scrollbar">
             <button 
               type="button"
-              className={`flex-1 py-2 px-2 text-xs md:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${role === 'PHARMACIST' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`flex-1 py-2 px-3 text-xs md:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${role === 'PHARMACIST' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
               onClick={() => { setRole('PHARMACIST'); setSelectedUser(''); }}
             >
               Pharmacist
             </button>
             <button 
               type="button"
-              className={`flex-1 py-2 px-2 text-xs md:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${role === 'IDS' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`flex-1 py-2 px-3 text-xs md:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${role === 'IDS' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
               onClick={() => { setRole('IDS'); setSelectedUser(''); }}
             >
               IDS
             </button>
              <button 
               type="button"
-              className={`flex-1 py-2 px-2 text-xs md:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${role === 'AMS' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`flex-1 py-2 px-3 text-xs md:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${role === 'AMS' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
               onClick={() => { setRole('AMS'); setSelectedUser('Admin'); }}
             >
               AMS
             </button>
             <button 
               type="button"
-              className={`flex-1 py-2 px-2 text-xs md:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${role === 'RESIDENT' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`flex-1 py-2 px-3 text-xs md:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${role === 'RESIDENT' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
               onClick={() => { setRole('RESIDENT'); setSelectedUser('Resident'); }}
             >
               Resident
+            </button>
+            <button 
+              type="button"
+              className={`flex-1 py-2 px-3 text-xs md:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${role === 'NURSE' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              onClick={() => { setRole('NURSE'); setSelectedUser('Nurse'); }}
+            >
+              Nurse
             </button>
           </div>
 
