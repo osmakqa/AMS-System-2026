@@ -49,9 +49,10 @@ export const IDS_SPECIALISTS = [
 export const WARDS = [
   "6th Floor Ward",
   "7th Floor Ward",
-  "ARI 2",
+  "Adult Cohort",
   "Dengue Ward",
   "Emergency Room Complex",
+  "ER Holding",
   "ICU",
   "Infectious Ward",
   "Medicine Female",
@@ -70,10 +71,6 @@ export const WARDS = [
   "Pedia Ward 3",
   "Pedia Ward 3 Extension",
   "Respiratory ICU",
-  "SARI",
-  "SARI 1",
-  "SARI 2",
-  "SARI 3",
   "Surgery Ward"
 ].sort();
 

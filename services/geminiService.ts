@@ -80,9 +80,9 @@ export const checkRenalDosing = async (
     `;
 
     // 4. Call the model
-    // Fix: Upgraded to 'gemini-3-pro-preview' for advanced clinical reasoning tasks.
+    // Fix: Upgraded to 'gemini-3.1-pro-preview' for advanced clinical reasoning tasks.
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-3.1-pro-preview',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -254,7 +254,7 @@ export const summarizeOtherInterventions = async (remarks: string[]): Promise<AI
   if (!remarks || remarks.length === 0) return [];
 
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
     const responseSchema = {
       type: Type.ARRAY,
