@@ -1,6 +1,6 @@
 # Design and Development Plan (ISO 9001:2015 Clause 8.3.2)
 
-**Project Title:** Osmak Antimicrobial Stewardship (AMS) System
+**Project Title:** Antimicrobial Stewardship (AMS) System
 **Department:** Pharmacy / Infectious Disease / IT
 **Date Prepared:** 2024-05-01
 

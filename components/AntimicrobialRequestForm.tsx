@@ -1,18 +1,38 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DrugType, PrescriptionStatus, UserRole, PreviousAntibiotic, Organism, Susceptibility } from '../types';
-import { IDS_SPECIALISTS_ADULT, IDS_SPECIALISTS_PEDIATRIC, WARDS, LOGO_URL, DETAILED_SYSTEM_SITE_OPTIONS } from '../constants';
+import { IDS_SPECIALISTS_ADULT, IDS_SPECIALISTS_PEDIATRIC, WARDS, DETAILED_SYSTEM_SITE_OPTIONS } from '../constants';
 import { ADULT_MONOGRAPHS } from '../data/adultMonographs';
 import { PEDIATRIC_MONOGRAPHS } from '../data/pediatricMonographs';
 import { checkRenalDosing, verifyPediatricDosing } from '../services/geminiService';
 
 interface AntimicrobialRequestFormProps {
   isOpen: boolean;
+  isInline?: boolean;
   onClose: () => void;
   onSubmit: (data: any) => void;
+  onClear?: () => void;
   loading: boolean;
   initialData?: any;
   role?: UserRole;
 }
+
+const INITIAL_FORM_DATA = {
+  patient_name: '', hospital_number: '', patient_dob: '', age: '', sex: '', weight_kg: '', height_cm: '', ward: '',
+  mode: 'adult' as 'adult' | 'pediatric',
+  diagnosis: '', system_site: '', system_site_other: '', sgpt: '', scr_mgdl: '', scr_date: '', egfr_text: '',
+  is_esrd: false,
+  antimicrobial: '', drug_type: DrugType.MONITORED as DrugType, dose: '', frequency: '', duration: '',
+  route: 'IV',
+  route_other: '',
+  indication: '', 
+  basis_indication: '',
+  selectedBasisCategory: '',
+  basis_indication_details: '',
+  selectedIndicationType: '' as 'Empiric' | 'Prophylactic' | 'Therapeutic' | '',
+  specimen: '',
+  culture_date: '',
+  resident_name: '', clinical_dept: '', service_resident_name: '', id_specialist: '',
+};
 
 const CLINICAL_DEPARTMENTS = [
   "Internal Medicine",
@@ -196,17 +216,36 @@ const OrganismBlock: React.FC<OrganismBlockProps> = ({ id, value, onChange, onRe
 interface SystemSiteSelectorProps {
   onSelect: (code: string) => void;
   onClose: () => void;
+  indicationType?: string;
 }
 
-const SystemSiteSelector: React.FC<SystemSiteSelectorProps> = ({ onSelect, onClose }) => {
+const SystemSiteSelector: React.FC<SystemSiteSelectorProps> = ({ onSelect, onClose, indicationType }) => {
   const [search, setSearch] = useState("");
   
   const filtered = useMemo(() => {
-    return DETAILED_SYSTEM_SITE_OPTIONS.filter(opt => 
+    let options = DETAILED_SYSTEM_SITE_OPTIONS;
+
+    // Filter based on indication type
+    if (indicationType === 'Empiric' || indicationType === 'Therapeutic') {
+      options = options.filter(opt => 
+        !opt.code.toLowerCase().includes('proph') && 
+        !opt.description.toLowerCase().includes('prophylaxis') &&
+        opt.code !== 'MP-GEN'
+      );
+    } else if (indicationType === 'Prophylactic') {
+      options = options.filter(opt => 
+        opt.code.toLowerCase().includes('proph') || 
+        opt.description.toLowerCase().includes('prophylaxis') ||
+        opt.code === 'MP-GEN' ||
+        opt.code === 'OTHERS (SPECIFY)'
+      );
+    }
+
+    return options.filter(opt => 
       opt.code.toLowerCase().includes(search.toLowerCase()) || 
       opt.description.toLowerCase().includes(search.toLowerCase())
     );
-  }, [search]);
+  }, [search, indicationType]);
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[110] p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
@@ -263,27 +302,13 @@ const SystemSiteSelector: React.FC<SystemSiteSelectorProps> = ({ onSelect, onClo
   );
 };
 
-const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isOpen, onClose, onSubmit, loading, initialData, role }) => {
+const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isOpen, isInline, onClose, onSubmit, onClear, loading, initialData, role }) => {
   const [patientMode, setPatientMode] = useState<'adult' | 'pediatric'>('adult');
   const [isSystemSiteSelectorOpen, setIsSystemSiteSelectorOpen] = useState(false);
   
   const [formData, setFormData] = useState({
+    ...INITIAL_FORM_DATA,
     req_date: getTodayDate(),
-    patient_name: '', hospital_number: '', patient_dob: '', age: '', sex: '', weight_kg: '', height_cm: '', ward: '',
-    mode: 'adult' as 'adult' | 'pediatric',
-    diagnosis: '', system_site: '', system_site_other: '', sgpt: '', scr_mgdl: '', scr_date: '', egfr_text: '',
-    is_esrd: false, // Internal state for On Dialysis checkbox
-    antimicrobial: '', drug_type: DrugType.MONITORED as DrugType, dose: '', frequency: '', duration: '',
-    route: 'IV',
-    route_other: '',
-    indication: '', 
-    basis_indication: '', // Combined final string
-    selectedBasisCategory: '', // New internal field
-    basis_indication_details: '', // New internal field
-    selectedIndicationType: '' as 'Empiric' | 'Prophylactic' | 'Therapeutic' | '',
-    specimen: '',
-    culture_date: '',
-    resident_name: '', clinical_dept: '', service_resident_name: '', id_specialist: '',
   });
 
   const [prevAbxRows, setPrevAbxRows] = useState<{ id: number; drug: string; frequency: string; duration: string }[]>([{ id: 0, drug: '', frequency: '', duration: '' }]);
@@ -297,7 +322,42 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
 
   const [showMonograph, setShowMonograph] = useState(false);
   const [showReview, setShowReview] = useState(false);
+
+  const filteredBasisOptions = useMemo(() => {
+    if (formData.selectedIndicationType === 'Empiric' || formData.selectedIndicationType === 'Therapeutic') {
+      return BASIS_OPTIONS.filter(opt => opt.id !== 'SP' && opt.id !== 'MP');
+    } else if (formData.selectedIndicationType === 'Prophylactic') {
+      return BASIS_OPTIONS.filter(opt => opt.id === 'SP' || opt.id === 'MP' || opt.id === 'Others');
+    }
+    return BASIS_OPTIONS;
+  }, [formData.selectedIndicationType]);
+
   const [isCustomWard, setIsCustomWard] = useState(false);
+
+  // Clear dependent fields when indication type changes to maintain consistency
+  useEffect(() => {
+    if (!formData.selectedIndicationType) return;
+
+    // Check if current system_site is still valid
+    if (formData.system_site && formData.system_site !== 'OTHERS (SPECIFY)') {
+      const isProph = formData.system_site.toLowerCase().includes('proph') || formData.system_site === 'MP-GEN';
+      const isIndicationProph = formData.selectedIndicationType === 'Prophylactic';
+      
+      if (isIndicationProph !== isProph) {
+        setFormData(prev => ({ ...prev, system_site: '', system_site_other: '' }));
+      }
+    }
+
+    // Check if current basis category is still valid
+    if (formData.selectedBasisCategory) {
+      const isProphBasis = formData.selectedBasisCategory === 'Surgical Prophylaxis' || formData.selectedBasisCategory === 'Medical Prophylaxis';
+      const isIndicationProph = formData.selectedIndicationType === 'Prophylactic';
+
+      if (isIndicationProph !== isProphBasis && formData.selectedBasisCategory !== 'Others (Specify)') {
+        setFormData(prev => ({ ...prev, selectedBasisCategory: '', basis_indication_details: '' }));
+      }
+    }
+  }, [formData.selectedIndicationType]);
 
   const nextPrevAbxId = React.useRef(1);
   const nextOrganismId = React.useRef(1);
@@ -318,29 +378,27 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
 
   const handleClearAll = () => {
     if (!window.confirm("Are you sure you want to clear all entries? This action cannot be undone.")) return;
+    
+    // Reset all local states
     setFormData({
+      ...INITIAL_FORM_DATA,
       req_date: getTodayDate(),
-      patient_name: '', hospital_number: '', patient_dob: '', age: '', sex: '', weight_kg: '', height_cm: '', ward: '',
-      mode: 'adult' as 'adult' | 'pediatric',
-      diagnosis: '', system_site: '', system_site_other: '', sgpt: '', scr_mgdl: '', scr_date: '', egfr_text: '',
-      is_esrd: false,
-      antimicrobial: '', drug_type: DrugType.MONITORED as DrugType, dose: '', frequency: '', duration: '',
-      route: 'IV',
-      route_other: '',
-      indication: '', 
-      basis_indication: '',
-      selectedBasisCategory: '',
-      basis_indication_details: '',
-      selectedIndicationType: '' as 'Empiric' | 'Prophylactic' | 'Therapeutic' | '',
-      specimen: '',
-      culture_date: '',
-      resident_name: '', clinical_dept: '', service_resident_name: '', id_specialist: '',
     });
-    setPrevAbxRows([{ id: 0, drug: '', frequency: '', duration: '' }]);
-    setOrganismBlocks([{ id: 0, name: '', susceptibilities: [{ drug: '', result: '' }] }]);
+    setPatientMode('adult');
+    setIsCustomWard(false);
     setScrNotAvailable(false);
     setValidationErrors({});
     setRenalAnalysis(null);
+    setMonographHtml('<p>Select an antimicrobial to view its monograph.</p>');
+    
+    // Reset dynamic rows
+    nextPrevAbxId.current = 1;
+    nextOrganismId.current = 1;
+    setPrevAbxRows([{ id: 0, drug: '', frequency: '', duration: '' }]);
+    setOrganismBlocks([{ id: 0, name: '', susceptibilities: [{ drug: '', result: '' }] }]);
+    
+    // Notify parent to clear its edit state if applicable
+    if (onClear) onClear();
   };
 
   useEffect(() => {
@@ -812,44 +870,54 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
     return found ? found.description : '';
   }, [formData.system_site]);
 
-  if (!isOpen) return null;
+  if (!isOpen && !isInline) return null;
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+  const content = (
+    <>
       {isSystemSiteSelectorOpen && (
         <SystemSiteSelector 
           onClose={() => setIsSystemSiteSelectorOpen(false)} 
+          indicationType={formData.selectedIndicationType}
           onSelect={(code) => {
             setFormData(prev => ({ ...prev, system_site: code }));
             setIsSystemSiteSelectorOpen(false);
           }} 
         />
       )}
-      
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden border border-gray-100 relative" onClick={(e) => e.stopPropagation()}>
+      <div className={`${isInline ? 'w-full' : 'bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden border border-gray-100 relative'}`} onClick={(e) => e.stopPropagation()}>
         
         {/* Main Header */}
-        <header className="flex items-center justify-between gap-4 bg-[#009a3e] text-white px-6 py-4 sticky top-0 z-20 shadow-md">
-          <div className="flex items-center gap-3">
-            <div className="flex flex-col">
-              <h3 className="text-lg font-bold leading-tight uppercase tracking-tight">Antimicrobial Request</h3>
-              <span className="text-[11px] font-bold text-white/80 tracking-wide">Antimicrobial Stewardship</span>
+        {!isInline && (
+          <header className="flex items-center justify-between gap-4 bg-[#009a3e] text-white px-6 py-4 sticky top-0 z-20 shadow-md">
+            <div className="flex items-center gap-3">
+              <div className="flex flex-col">
+                <h3 className="text-lg font-bold leading-tight uppercase tracking-tight">Antimicrobial Request</h3>
+                <span className="text-[11px] font-bold text-white/80 tracking-wide">Antimicrobial Stewardship</span>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={onClose} className="text-white/80 hover:text-white hover:bg-white/20 rounded-full p-2 transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-          </div>
-        </header>
+            <div className="flex items-center gap-2">
+              <button onClick={onClose} className="text-white/80 hover:text-white hover:bg-white/20 rounded-full p-2 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+          </header>
+        )}
 
         {/* Form Body */}
-        <div className="p-8 overflow-y-auto flex-1 bg-gray-50/50 space-y-8">
-            <div className="flex justify-center mb-4">
+        <div className={`p-0 md:p-8 flex-1 bg-gray-50/50 space-y-8 ${isInline ? '' : 'overflow-y-auto max-h-[95vh]'}`}>
+            <div className="relative flex flex-col sm:flex-row justify-center items-center gap-4 mb-4">
                 <div className="inline-flex rounded-xl bg-gray-200 p-1 shadow-inner">
-                    <button type="button" className={`px-6 py-2 text-xs font-bold rounded-lg transition-all ${patientMode === 'adult' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`} onClick={() => handleModeChange('adult')}>Adult Patient</button>
-                    <button type="button" className={`px-6 py-2 text-xs font-bold rounded-lg transition-all ${patientMode === 'pediatric' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`} onClick={() => handleModeChange('pediatric')}>Pediatric Patient</button>
+                    <button type="button" className={`px-4 sm:px-6 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-all ${patientMode === 'adult' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`} onClick={() => handleModeChange('adult')}>Adult Patient</button>
+                    <button type="button" className={`px-4 sm:px-6 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-all ${patientMode === 'pediatric' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`} onClick={() => handleModeChange('pediatric')}>Pediatric Patient</button>
                 </div>
+                <button 
+                  type="button" 
+                  onClick={handleClearAll} 
+                  className="sm:absolute sm:right-0 px-4 py-2 text-red-600 hover:bg-red-50 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border border-red-100"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    <span>Clear All entries</span>
+                </button>
             </div>
 
             <form className="space-y-8 max-w-4xl mx-auto">
@@ -945,7 +1013,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                                 onChange={handleChange}
                             >
                                 <option value="">Select Basis Category...</option>
-                                {BASIS_OPTIONS.map(opt => (
+                                {filteredBasisOptions.map(opt => (
                                     <option key={opt.id} value={opt.label}>{opt.label}</option>
                                 ))}
                             </Select>
@@ -1102,17 +1170,9 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
         </div>
 
         {/* Footer */}
-        <footer className="p-4 bg-white border-t border-gray-100 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 shrink-0 px-6 md:px-8">
-            <button 
-              type="button" 
-              onClick={handleClearAll} 
-              className="w-full md:w-auto px-6 py-2.5 text-red-600 hover:bg-red-50 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 border border-red-100 md:border-transparent"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                Clear All
-            </button>
+        <footer className="p-4 bg-white border-t border-gray-100 flex flex-col md:flex-row justify-end items-stretch md:items-center gap-3 shrink-0 px-6 md:px-8">
             <div className="flex gap-2 w-full md:w-auto">
-                <button type="button" onClick={onClose} className="flex-1 md:flex-none px-6 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl text-sm font-bold transition-all border border-gray-200">Cancel</button>
+                {!isInline && <button type="button" onClick={onClose} className="flex-1 md:flex-none px-6 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl text-sm font-bold transition-all border border-gray-200">Cancel</button>}
                 <button type="button" onClick={openReview} disabled={loading} className="flex-[2] md:flex-none px-10 py-2.5 bg-[#009a3e] text-white rounded-xl text-sm font-bold shadow-lg hover:shadow-green-200 transition-all flex items-center justify-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     Review Request
@@ -1250,6 +1310,14 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
             </div>
         )}
       </div>
+    </>
+  );
+
+  if (isInline) return content;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+      {content}
     </div>
   );
 };

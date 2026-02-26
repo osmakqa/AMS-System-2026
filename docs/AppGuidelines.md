@@ -1,5 +1,5 @@
 
-# Ospital ng Makati Antimicrobial Stewardship (AMS) System Guidelines
+# Antimicrobial Stewardship (AMS) System Guidelines
 
 **Document Version:** 1.1  
 **Effective Date:** May 2024  
@@ -8,7 +8,7 @@
 ---
 
 ## 1. Introduction
-The **Osmak AMS System** is a centralized digital platform designed to optimize antimicrobial use within the institution. It facilitates the **electronic requesting and authorization** of antimicrobial prescriptions, replacing manual paper-based forms with a streamlined, role-based approval workflow.
+The **Antimicrobial Stewardship System** is a centralized digital platform designed to optimize antimicrobial use within the institution. It facilitates the **electronic requesting and authorization** of antimicrobial prescriptions, replacing manual paper-based forms with a streamlined, role-based approval workflow.
 
 ## 2. Scope and Objectives
 

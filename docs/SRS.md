@@ -1,13 +1,13 @@
 
 # Software Requirements Specification (SRS) (ISO 9001:2015 Clause 8.3.3)
 
-**Project:** Osmak AMS System
+**Project:** Antimicrobial Stewardship System
 **Version:** 1.9
 
 ---
 
 ## 1. Introduction
-This document defines the requirements for the Osmak AMS System, an application designed to manage the authorization of antimicrobial prescriptions and facilitate clinical auditing within the hospital.
+This document defines the requirements for the Antimicrobial Stewardship System, an application designed to manage the authorization of antimicrobial prescriptions and facilitate clinical auditing within the hospital.
 
 ## 2. Functional Requirements
 

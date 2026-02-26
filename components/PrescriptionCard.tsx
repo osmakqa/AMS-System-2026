@@ -59,8 +59,8 @@ const PrescriptionCard: React.FC<PrescriptionCardProps> = ({ item, onAction, onV
         </div>
       </div>
 
-      <h3 className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent truncate">{item.patient_name}</h3>
-      <p className="text-sm text-gray-600 mb-4">ID: {item.hospital_number} • Ward: {item.ward || 'N/A'}</p>
+      <h3 className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent truncate">{item.hospital_number}</h3>
+      <p className="text-sm text-gray-600 mb-4">Name: {item.patient_name} • Ward: {item.ward || 'N/A'}</p>
       
       <div className="p-4 rounded-lg mb-5 bg-black/5">
         <div className="flex items-center">
@@ -96,15 +96,11 @@ const PrescriptionCard: React.FC<PrescriptionCardProps> = ({ item, onAction, onV
            </>
         )}
 
-        {role === UserRole.RESIDENT && item.status === PrescriptionStatus.DISAPPROVED && (
+        {item.status === PrescriptionStatus.DISAPPROVED && (
             <>
                 <button onClick={() => onAction(item.id, ActionType.RESEND, { isEditing: true })} className={`flex-1 ${btnBase} bg-blue-600 text-white hover:bg-blue-700`}>
                     <EditIcon/> Edit
                 </button>
-                <button onClick={() => onAction(item.id, ActionType.RESEND)} className={`flex-1 ${btnBase} bg-green-600 text-white hover:bg-green-700`}>
-                    <RefreshIcon/> Resend
-                </button>
-                <button onClick={() => onAction(item.id, ActionType.DELETE)} className={`${btnBase} bg-gray-200 text-gray-700 hover:bg-red-100 hover:text-red-700 w-10 h-10 p-0`} title="Delete Request"><TrashIcon/></button>
             </>
         )}
       </div>

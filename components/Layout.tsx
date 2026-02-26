@@ -1,6 +1,5 @@
 
 import React from 'react';
-import { LOGO_URL } from '../constants';
 import { User, UserRole } from '../types';
 
 interface LayoutProps {
@@ -24,18 +23,10 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, onOpenSettings, childre
         <div className="flex items-center gap-8 overflow-hidden">
           {/* Branding */}
           <div className="flex items-center gap-3 shrink-0">
-            <img 
-              src={LOGO_URL} 
-              alt="OsMak Logo" 
-              className="h-10 w-auto object-contain"
-            />
-            <div className="flex flex-col">
-              <h1 className="m-0 text-[10px] sm:text-sm tracking-wider uppercase font-bold leading-tight text-white truncate">
-                OSPITAL NG MAKATI
+            <div className="flex items-center">
+              <h1 className="m-0 text-[10px] sm:text-sm md:text-base tracking-wider uppercase font-bold leading-tight text-white whitespace-nowrap">
+                ANTIMICROBIAL STEWARDSHIP SYSTEM
               </h1>
-              <span className="text-[8px] sm:text-xs text-white/80 leading-tight">
-                Antimicrobial Stewardship
-              </span>
             </div>
           </div>
           {/* Desktop Navigation */}
@@ -58,11 +49,6 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, onOpenSettings, childre
         
         {/* User Info & Actions Section */}
         <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-          <div className="text-right hidden md:flex flex-col items-end border-r border-white/20 pr-4 mr-2">
-            <p className="text-sm font-semibold text-white">{user.name}</p>
-            <p className="text-xs text-white/70 uppercase tracking-tighter">{user.role.replace('_', ' ')}</p>
-          </div>
-
           {/* Settings Icon - Visible on ALL screen sizes for authorized roles */}
           {canAccessSettings && onOpenSettings && (
             <button 
@@ -76,13 +62,6 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, onOpenSettings, childre
               </svg>
             </button>
           )}
-
-          <button 
-            onClick={onLogout}
-            className="bg-white/10 hover:bg-white/20 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-colors border border-white/10"
-          >
-            Logout
-          </button>
         </div>
       </header>
 
@@ -95,7 +74,7 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, onOpenSettings, childre
       <footer className="bg-white border-t border-gray-200 mt-auto hidden sm:block">
         <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
           <p className="text-center text-xs text-gray-500">
-            &copy; {new Date().getFullYear()} Ospital ng Makati. All rights reserved.
+            &copy; {new Date().getFullYear()} Antimicrobial Stewardship System. All rights reserved.
           </p>
         </div>
       </footer>

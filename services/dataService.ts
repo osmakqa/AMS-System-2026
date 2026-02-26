@@ -157,9 +157,12 @@ export const createPrescription = async (prescription: Partial<Prescription>) =>
         nextNum = (Number(lastEntry.request_number) || 0) + 1;
     }
 
+    const nextArfNum = await getNextArfNumber();
+
     const docRef = await addDoc(collection(db, 'requests'), {
       ...prescription,
       request_number: nextNum,
+      arf_number: nextArfNum,
       created_at: new Date().toISOString()
     });
     
@@ -167,7 +170,7 @@ export const createPrescription = async (prescription: Partial<Prescription>) =>
     if (newDoc.exists()) {
       sendToGoogleSheet("Prescriptions", { ...newDoc.data(), id: docRef.id });
     }
-    return docRef.id;
+    return { id: docRef.id, arf_number: nextArfNum };
   } catch (err: any) {
     console.error('Create error:', err);
     throw err;

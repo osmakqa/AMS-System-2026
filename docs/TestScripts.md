@@ -1,6 +1,6 @@
 # Verification Record - Test Scripts (ISO 9001:2015 Clause 8.3.4)
 
-**Project:** Osmak Antimicrobial Stewardship (AMS) System
+**Project:** Antimicrobial Stewardship (AMS) System
 **Test Date:** 2024-05-01
 **Tester:** [Insert Name]
 

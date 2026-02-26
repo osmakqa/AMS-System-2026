@@ -6,7 +6,6 @@ import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import MonitoringDetailModal from './MonitoringDetailModal';
 import AddPatientModal from './AddPatientModal';
 import EditPatientModal from './EditPatientModal';
-import PasswordModal from './PasswordModal';
 import { WARDS } from '../constants';
 
 interface AMSMonitoringProps {
@@ -64,10 +63,6 @@ const AMSMonitoring: React.FC<AMSMonitoringProps> = ({ user }) => {
   const [selectedPatientIdInView, setSelectedPatientIdInView] = useState<string | null>(null);
   const [selectedPatientForEdit, setSelectedPatientForEdit] = useState<MonitoringPatient | null>(null);
   
-  // Delete Confirmation State
-  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-  const [patientToDelete, setPatientToDelete] = useState<MonitoringPatient | null>(null);
-
   // Real-time listener
   useEffect(() => {
     const q = query(collection(db, 'monitoring_patients'), orderBy('created_at', 'desc'));
@@ -143,39 +138,18 @@ const AMSMonitoring: React.FC<AMSMonitoringProps> = ({ user }) => {
     });
   }, [filteredPatients, sortConfig]);
 
-  const getCurrentUserPassword = (user: User | null) => {
-    if (!user) return 'osmak123';
-    if (user.role === UserRole.AMS_ADMIN) return 'ams123';
-    if (user.role === UserRole.RESIDENT) return 'doctor123';
-    if (user.role === UserRole.PHARMACIST) {
-      const lastName = user.name.split(',')[0].trim().toLowerCase().replace(/\s/g, '');
-      return `${lastName}123`;
+  const handleDeleteClick = async (patient: MonitoringPatient) => {
+    if (window.confirm(`Are you sure you want to delete the monitoring record for ${patient.patient_name}?`)) {
+      try {
+          await deleteMonitoringPatient(patient.id);
+          alert("Patient monitoring record deleted.");
+      } catch (err: any) {
+          alert("Failed to delete patient: " + err.message);
+      }
     }
-    if (user.role === UserRole.IDS) {
-      const parts = user.name.trim().split(' ');
-      const lastName = parts[parts.length - 1].toLowerCase();
-      return `${lastName}456`;
-    }
-    return 'osmak123';
   };
 
-  const handleDeleteClick = (patient: MonitoringPatient) => {
-    setPatientToDelete(patient);
-    setIsPasswordModalOpen(true);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!patientToDelete) return;
-    try {
-        await deleteMonitoringPatient(patientToDelete.id);
-        alert("Patient monitoring record deleted.");
-    } catch (err: any) {
-        alert("Failed to delete patient: " + err.message);
-    } finally {
-        setPatientToDelete(null);
-        setIsPasswordModalOpen(false);
-    }
-  };
+  // Real-time listener
 
   return (
     <div className="space-y-6">
@@ -274,16 +248,6 @@ const AMSMonitoring: React.FC<AMSMonitoringProps> = ({ user }) => {
         {isAddModalOpen && <AddPatientModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} user={user} onSuccess={() => setIsAddModalOpen(false)} />}
         {patientInView && <MonitoringDetailModal isOpen={!!patientInView} onClose={() => setSelectedPatientIdInView(null)} patient={patientInView} user={user} onUpdate={() => {}} />}
         {selectedPatientForEdit && <EditPatientModal isOpen={!!selectedPatientForEdit} onClose={() => setSelectedPatientForEdit(null)} patient={selectedPatientForEdit} user={user} />}
-        
-        {isPasswordModalOpen && patientToDelete && (
-            <PasswordModal 
-                isOpen={isPasswordModalOpen} 
-                onClose={() => { setIsPasswordModalOpen(false); setPatientToDelete(null); }} 
-                onConfirm={handleConfirmDelete} 
-                title={`Delete Monitoring for ${patientToDelete.patient_name}?`}
-                expectedPassword={getCurrentUserPassword(user)}
-            />
-        )}
     </div>
   );
 };

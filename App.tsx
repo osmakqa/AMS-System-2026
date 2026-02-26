@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import Login from './components/Login';
 import Layout from './components/Layout';
 import PrescriptionCard from './components/PrescriptionCard';
 import PrescriptionTable from './components/PrescriptionTable';
@@ -8,8 +7,6 @@ import PasswordModal from './components/PasswordModal';
 import DetailModal from './components/DetailModal';
 import DisapproveModal from './components/DisapproveModal';
 import ChartDetailModal from './components/ChartDetailModal';
-import UserManualModal from './components/UserManualModal';
-import WorkflowModal from './components/WorkflowModal'; 
 import AntimicrobialRequestForm from './components/AntimicrobialRequestForm'; 
 import AMSAuditForm from './components/AMSAuditForm'; 
 import AMSAuditTable from './components/AMSAuditTable'; 
@@ -33,16 +30,26 @@ import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { WARDS } from './constants';
 
 const tabsConfig: Record<UserRole, string[]> = {
-  [UserRole.PHARMACIST]: ['Pending', 'History', 'AMS Monitoring', 'Data Analysis'], 
-  [UserRole.IDS]: ['Pending', 'History'],
-  [UserRole.AMS_ADMIN]: ['Antimicrobials', 'AMS Audit', 'Data Analysis', 'Password Manager'],
-  [UserRole.RESIDENT]: ['Disapproved', 'Data Analysis'],
-  [UserRole.NURSE]: ['Pending'],
+  [UserRole.PHARMACIST]: ['Request Form', 'Doctors', 'Nurses'], 
+  [UserRole.IDS]: ['Request Form', 'Doctors', 'Nurses'],
+  [UserRole.AMS_ADMIN]: ['Request Form', 'Doctors', 'Nurses', 'Antimicrobials', 'AMS Audit', 'Data Analysis', 'Password Manager'],
+  [UserRole.RESIDENT]: ['Request Form', 'Doctors', 'Nurses'],
+  [UserRole.NURSE]: ['Request Form', 'Doctors', 'Nurses'],
 };
 
 const TabIcon = ({ tabName }: { tabName: string }) => {
   let path;
   switch (tabName) {
+    case 'Request Form':
+      path = <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />;
+      break;
+    case 'Doctors':
+    case 'Disapproved':
+      path = <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.415L11 9.586V6z" clipRule="evenodd" />;
+      break;
+    case 'Nurses':
+      path = <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />;
+      break;
     case 'Pending':
       path = <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.414-1.415L11 9.586V6z" clipRule="evenodd" />;
       break;
@@ -92,11 +99,16 @@ const isIdsNameMatch = (userName: string, recordName: string | undefined | null)
 
 
 function App() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>({
+    id: 'default-resident',
+    name: 'Resident Physician',
+    role: UserRole.RESIDENT,
+    password: 'doctor123'
+  });
   const [data, setData] = useState<Prescription[]>([]);
   const [auditData, setAuditData] = useState<AMSAudit[]>([]); 
   const [monitoringData, setMonitoringData] = useState<MonitoringPatient[]>([]);
-  const [activeTab, setActiveTab] = useState('Pending');
+  const [activeTab, setActiveTab] = useState('Request Form');
   const [loading, setLoading] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
   
@@ -105,8 +117,6 @@ function App() {
   const [selectedItemForView, setSelectedItemForView] = useState<Prescription | null>(null);
   const [pendingAction, setPendingAction] = useState<{id: string, type: ActionType, payload?: any} | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isUserManualOpen, setIsUserManualOpen] = useState(false);
-  const [isWorkflowModalOpen, setIsWorkflowModalOpen] = useState(false);
   const [isAntimicrobialRequestFormOpen, setIsAntimicrobialRequestFormOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
@@ -115,6 +125,7 @@ function App() {
   const [isAMSAuditFormOpen, setIsAMSAuditFormOpen] = useState(false);
   const [selectedAuditToEdit, setSelectedAuditToEdit] = useState<AMSAudit | null>(null);
   const [selectedAuditForView, setSelectedAuditForView] = useState<AMSAudit | null>(null);
+  const [submittedArfNumber, setSubmittedArfNumber] = useState<number | null>(null);
 
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -174,13 +185,9 @@ function App() {
 
   const handleLogin = (loggedInUser: User) => {
     setUser(loggedInUser);
-    if (loggedInUser.role === UserRole.IDS || loggedInUser.role === UserRole.PHARMACIST || loggedInUser.role === UserRole.NURSE) {
-      setActiveTab('Pending');
-    } else if (loggedInUser.role === UserRole.RESIDENT) {
-      setActiveTab('Disapproved');
+    setActiveTab('Request Form');
+    if (loggedInUser.role === UserRole.RESIDENT) {
       setSelectedDay(new Date().toLocaleDateString('en-CA'));
-    } else {
-      setActiveTab('Antimicrobials');
     }
   };
 
@@ -264,6 +271,12 @@ function App() {
 
     if (pendingAction.type === ActionType.ADMIN_PASSWORD_FOR_TAB) {
         setActiveTab('Password Manager');
+        setPendingAction(null);
+        return;
+    }
+
+    if (pendingAction.type === ActionType.ADMIN_PASSWORD_FOR_DISAPPROVED || pendingAction.type === ActionType.ADMIN_PASSWORD_FOR_NURSES) {
+        setActiveTab(pendingAction.type === ActionType.ADMIN_PASSWORD_FOR_DISAPPROVED ? 'Doctors' : 'Nurses');
         setPendingAction(null);
         return;
     }
@@ -399,7 +412,7 @@ function App() {
           payload.findings = [];
 
           await createPrescription(payload);
-          alert("New request form and ARF# generated. Your request is now PENDING review.");
+          setSubmittedArfNumber(nextArf);
       } else if (formData.id) {
           const payload = { ...formData };
           let newStatus: PrescriptionStatus | null = PrescriptionStatus.PENDING;
@@ -430,8 +443,10 @@ function App() {
           await updatePrescriptionStatus(formData.id, newStatus, payload);
           alert("Request Updated successfully!");
       } else {
+          const nextArf = await getNextArfNumber();
+          formData.arf_number = nextArf;
           await createPrescription(formData); 
-          alert("Antimicrobial Request submitted successfully!");
+          setSubmittedArfNumber(nextArf);
       }
       setIsAntimicrobialRequestFormOpen(false);
       setRequestToEdit(null); 
@@ -445,6 +460,18 @@ function App() {
   const handleTabSelection = (tab: string) => {
     if (tab === 'Password Manager' && user?.role === UserRole.AMS_ADMIN) {
         setPendingAction({ id: 'tab-security', type: ActionType.ADMIN_PASSWORD_FOR_TAB });
+        setIsPasswordModalOpen(true);
+        return;
+    }
+    
+    if (tab === 'Doctors') {
+        setPendingAction({ id: 'tab-doctors', type: ActionType.ADMIN_PASSWORD_FOR_DISAPPROVED });
+        setIsPasswordModalOpen(true);
+        return;
+    }
+
+    if (tab === 'Nurses') {
+        setPendingAction({ id: 'tab-nurses', type: ActionType.ADMIN_PASSWORD_FOR_NURSES });
         setIsPasswordModalOpen(true);
         return;
     }
@@ -558,7 +585,7 @@ function App() {
       }
     }
 
-    if (user?.role === UserRole.RESIDENT && activeTab === 'Disapproved') {
+    if (user?.role === UserRole.RESIDENT && activeTab === 'Doctors') {
         return items.filter(i => statusMatches(i.status, PrescriptionStatus.DISAPPROVED));
     }
 
@@ -567,9 +594,10 @@ function App() {
   
   const FilterHeader = () => {
     const isNursePending = user?.role === UserRole.NURSE && activeTab === 'Pending';
-    const showFilters = isNursePending || user?.role === UserRole.RESIDENT || 
+    const showFilters = (isNursePending || user?.role === UserRole.RESIDENT || 
         (user?.role !== UserRole.AMS_ADMIN && activeTab !== 'Pending' && activeTab !== 'Data Analysis' && activeTab !== 'AMS Monitoring' && activeTab !== 'Password Manager') || 
-        (user?.role === UserRole.AMS_ADMIN && (activeTab !== 'Data Analysis' && activeTab !== 'AMS Audit' && activeTab !== 'Password Manager'));
+        (user?.role === UserRole.AMS_ADMIN && (activeTab !== 'Data Analysis' && activeTab !== 'AMS Audit' && activeTab !== 'Password Manager')))
+        && activeTab !== 'Request Form' && activeTab !== 'Doctors' && activeTab !== 'Nurses';
 
     if (!showFilters) return null;
 
@@ -733,6 +761,143 @@ function App() {
   };
 
   const renderContent = () => {
+    if (activeTab === 'Request Form') {
+        if (submittedArfNumber !== null) {
+            return (
+                <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200 mx-auto mt-10">
+                    <div className="p-6 text-center">
+                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                        </div>
+                        <h3 className="text-2xl font-bold text-gray-900 mb-2">Thank you for your submission!</h3>
+                        <p className="text-gray-600 mb-6">Your antimicrobial request form has been submitted successfully.</p>
+                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 mb-6">
+                            <p className="text-sm text-gray-500 mb-1">Your ARF Number is</p>
+                            <p className="text-3xl font-bold text-[#009a3e]">ARF-{submittedArfNumber.toString().padStart(4, '0')}</p>
+                        </div>
+                        <button 
+                            onClick={() => setSubmittedArfNumber(null)}
+                            className="w-full bg-[#009a3e] hover:bg-[#008234] text-white font-medium py-3 px-4 rounded-xl transition-colors"
+                        >
+                            Submit Another Request
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+        return (
+            <AntimicrobialRequestForm 
+                isOpen={true}
+                isInline={true}
+                onClose={() => {}}
+                onSubmit={handleFormSubmission}
+                onClear={() => setRequestToEdit(null)}
+                loading={isSubmitting}
+                initialData={requestToEdit}
+                role={user?.role}
+            />
+        );
+    }
+
+    if (activeTab === 'Doctors') {
+        const disapprovedItems = data.filter(i => {
+            const statusMatch = statusMatches(i.status, PrescriptionStatus.DISAPPROVED);
+            const itemDate = i.req_date ? new Date(i.req_date).toLocaleDateString('en-CA') : '';
+            const dateMatch = itemDate === selectedDay;
+            const wardMatch = historyWardFilter === 'All' || i.ward === historyWardFilter;
+            return statusMatch && dateMatch && wardMatch;
+        });
+
+        return (
+          <div>
+             <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6">
+                <div><h2 className="text-xl font-bold text-black">Disapproved Requests (Doctors)</h2><p className="text-sm text-gray-500">Total: {disapprovedItems.length} (Filtered by {new Date(selectedDay).toLocaleDateString()})</p></div>
+                <div className="flex flex-col sm:flex-row items-center gap-4">
+                    <div className="flex items-center gap-2 min-w-[200px]">
+                        <label className="text-xs font-semibold text-gray-500 uppercase">Ward:</label>
+                        <select
+                            value={historyWardFilter}
+                            onChange={(e) => setHistoryWardFilter(e.target.value)}
+                            className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none [color-scheme:light]"
+                        >
+                            <option value="All">All Wards</option>
+                            {WARDS.map(w => <option key={w} value={w}>{w}</option>)}
+                        </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <label className="text-xs font-semibold text-gray-500 uppercase">Filter Day:</label>
+                        <input 
+                            type="date" 
+                            value={selectedDay} 
+                            onChange={(e) => setSelectedDay(e.target.value)} 
+                            className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none shadow-sm [color-scheme:light]"
+                        />
+                    </div>
+                </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {disapprovedItems.length === 0 ? <p className="col-span-full text-center py-10 bg-white rounded-lg">No disapproved requests found for this date.</p> : disapprovedItems.map(item => (
+                <PrescriptionCard key={item.id} item={item} role={user!.role} onAction={handleActionClick} onView={handleViewDetails} />
+              ))}
+            </div>
+          </div>
+        );
+    }
+
+    if (activeTab === 'Nurses') {
+        const pendingItems = data.filter(i => {
+            const statusMatch = statusMatches(i.status, PrescriptionStatus.PENDING);
+            const itemDate = i.req_date ? new Date(i.req_date).toLocaleDateString('en-CA') : '';
+            const dateMatch = itemDate === selectedDay;
+            const wardMatch = nurseWardFilter === 'All' || i.ward === nurseWardFilter;
+            return statusMatch && dateMatch && wardMatch;
+        });
+
+        return (
+            <div>
+                <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6">
+                    <div>
+                        <h2 className="text-xl font-bold text-black">Nurses Dashboard</h2>
+                        <p className="text-sm text-gray-500">Pending Requests - Total: {pendingItems.length} (Filtered by {new Date(selectedDay).toLocaleDateString()})</p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row items-center gap-4">
+                        <div className="flex items-center gap-2 min-w-[200px]">
+                            <label className="text-xs font-semibold text-gray-500 uppercase">Ward:</label>
+                            <select
+                                value={nurseWardFilter}
+                                onChange={(e) => setNurseWardFilter(e.target.value)}
+                                className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none [color-scheme:light]"
+                            >
+                                <option value="All">All Wards</option>
+                                {WARDS.map(w => <option key={w} value={w}>{w}</option>)}
+                            </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <label className="text-xs font-semibold text-gray-500 uppercase">Filter Day:</label>
+                            <input 
+                                type="date" 
+                                value={selectedDay} 
+                                onChange={(e) => setSelectedDay(e.target.value)} 
+                                className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none shadow-sm [color-scheme:light]"
+                            />
+                        </div>
+                    </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {pendingItems.length === 0 ? (
+                        <p className="col-span-full text-center py-10 bg-white rounded-lg">No pending requests found for this date/ward.</p>
+                    ) : (
+                        pendingItems.map(item => (
+                            <PrescriptionCard key={item.id} item={item} role={user!.role} onAction={handleActionClick} onView={handleViewDetails} />
+                        ))
+                    )}
+                </div>
+            </div>
+        );
+    }
+
     if (dbError) {
       return (
         <div className="p-12 bg-white rounded-lg shadow-md border-l-4 border-red-500 my-8">
@@ -761,11 +926,11 @@ function App() {
         );
     }
 
-    if (activeTab === 'AMS Monitoring') return <AMSMonitoring user={user} />;
+    if (activeTab === 'AMS Monitoring' && user?.role === UserRole.AMS_ADMIN) return <AMSMonitoring user={user} />;
 
     const viewData = getFilteredDataForCurrentView();
 
-    if (activeTab === 'Pending' || (user?.role === UserRole.RESIDENT && activeTab === 'Disapproved')) {
+    if (activeTab === 'Pending') {
         const titleMap: any = { PHARMACIST: 'Pending Requests', IDS: 'Pending for IDS Approval', RESIDENT: 'Disapproved Requests', NURSE: 'Pending Units Surveillance' };
         return (
           <div>
@@ -886,11 +1051,10 @@ function App() {
 
   return (
     <>
-      <UserManualModal isOpen={isUserManualOpen} onClose={() => setIsUserManualOpen(false)} />
-      <WorkflowModal isOpen={isWorkflowModalOpen} onClose={() => setIsWorkflowModalOpen(false)} />
       <AntimicrobialRequestForm 
         isOpen={isAntimicrobialRequestFormOpen} 
         onClose={() => { setIsAntimicrobialRequestFormOpen(false); setRequestToEdit(null); }} 
+        onClear={() => setRequestToEdit(null)}
         onSubmit={handleFormSubmission} 
         loading={isSubmitting} 
         initialData={requestToEdit}
@@ -908,30 +1072,63 @@ function App() {
           />
       )}
 
-      {!user ? (
-        <Login onLogin={handleLogin} onOpenManual={() => setIsUserManualOpen(false)} onOpenWorkflow={() => setIsWorkflowModalOpen(true)} onOpenAntimicrobialRequestForm={() => { setRequestToEdit(null); setIsAntimicrobialRequestFormOpen(true); }} onOpenAuditForm={() => { setSelectedAuditToEdit(null); setIsAMSAuditFormOpen(true); }} />
-      ) : (
-        <>
-          <Layout 
-            user={user} 
-            onLogout={handleLogout} 
-            onOpenSettings={() => setIsSettingsOpen(true)}
-            tabs={currentTabs} 
-            activeTab={activeTab} 
-            onTabChange={handleTabSelection}
-          >
-            <PasswordModal isOpen={isPasswordModalOpen} onClose={() => setIsPasswordModalOpen(false)} onConfirm={handleConfirmPassword} expectedPassword={getCurrentUserPassword(user)} />
-            <DisapproveModal isOpen={isDisapproveModalOpen} onClose={() => setIsDisapproveModalOpen(false)} onSubmit={handleDisapproveSubmit} loading={isSubmitting} />
-            <DetailModal isOpen={!!selectedItemForView} onClose={() => setSelectedItemForView(null)} item={selectedItemForView} role={user.role} userName={user.name} onAction={handleActionClick} />
-            <div className="pb-20 md:pb-0">{FilterHeader()}{renderContent()}</div>
-          </Layout>
-          <div className="fixed bottom-0 left-0 right-0 bg-[#009a3e] p-2 z-40 md:hidden flex overflow-x-auto gap-2 justify-around shadow-[0_-2px_10px_rgba(0,0,0,0.1)]">
-            {currentTabs.map((tab) => (
-              <button key={tab} onClick={() => handleTabSelection(tab)} className={`whitespace-nowrap px-2 py-1.5 font-medium text-xs transition-all duration-200 rounded-lg flex flex-col items-center flex-1 ${activeTab === tab ? 'bg-white text-[#009a3e] shadow-md' : 'text-white/80 hover:bg-white/20 hover:text-white'}`}><span className="mb-0.5"><TabIcon tabName={tab} /></span>{tab}</button>
-            ))}
+      <Layout 
+        user={user!} 
+        onLogout={handleLogout} 
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        tabs={currentTabs} 
+        activeTab={activeTab} 
+        onTabChange={handleTabSelection}
+      >
+        {submittedArfNumber !== null && activeTab !== 'Request Form' && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+              <div className="p-6 text-center">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">Thank you for your submission!</h3>
+                <p className="text-gray-600 mb-6">Your antimicrobial request form has been submitted successfully.</p>
+                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 mb-6">
+                  <p className="text-sm text-gray-500 mb-1">Your ARF Number is</p>
+                  <p className="text-3xl font-bold text-[#009a3e]">ARF-{submittedArfNumber.toString().padStart(4, '0')}</p>
+                </div>
+                <button 
+                  onClick={() => setSubmittedArfNumber(null)}
+                  className="w-full bg-[#009a3e] hover:bg-[#008234] text-white font-medium py-3 px-4 rounded-xl transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
           </div>
-        </>
-      )}
+        )}
+        <PasswordModal 
+            isOpen={isPasswordModalOpen} 
+            onClose={() => setIsPasswordModalOpen(false)} 
+            onConfirm={handleConfirmPassword} 
+            expectedPassword={
+                pendingAction?.type === ActionType.ADMIN_PASSWORD_FOR_DISAPPROVED ? 'doctor123' : 
+                pendingAction?.type === ActionType.ADMIN_PASSWORD_FOR_NURSES ? 'osmaknurse' : 
+                getCurrentUserPassword(user)
+            } 
+            title={
+                pendingAction?.type === ActionType.ADMIN_PASSWORD_FOR_DISAPPROVED ? 'Enter Password to View Doctors Requests' : 
+                pendingAction?.type === ActionType.ADMIN_PASSWORD_FOR_NURSES ? 'Enter Password to View Nurses Dashboard' : 
+                undefined
+            }
+        />
+        <DisapproveModal isOpen={isDisapproveModalOpen} onClose={() => setIsDisapproveModalOpen(false)} onSubmit={handleDisapproveSubmit} loading={isSubmitting} />
+        <DetailModal isOpen={!!selectedItemForView} onClose={() => setSelectedItemForView(null)} item={selectedItemForView} role={user!.role} userName={user!.name} onAction={handleActionClick} />
+        <div className="pb-20 md:pb-0">{FilterHeader()}{renderContent()}</div>
+      </Layout>
+      <div className="fixed bottom-0 left-0 right-0 bg-[#009a3e] p-2 z-40 md:hidden flex overflow-x-auto gap-2 justify-around shadow-[0_-2px_10px_rgba(0,0,0,0.1)]">
+        {currentTabs.map((tab) => (
+          <button key={tab} onClick={() => handleTabSelection(tab)} className={`whitespace-nowrap px-2 py-1.5 font-medium text-xs transition-all duration-200 rounded-lg flex flex-col items-center flex-1 ${activeTab === tab ? 'bg-white text-[#009a3e] shadow-md' : 'text-white/80 hover:bg-white/20 hover:text-white'}`}><span className="mb-0.5"><TabIcon tabName={tab} /></span>{tab}</button>
+        ))}
+      </div>
     </>
   );
 }

@@ -135,8 +135,6 @@ export const DETAILED_SYSTEM_SITE_OPTIONS = [
 
 export const DEFAULT_PASSWORD = "osmak123";
 
-export const LOGO_URL = "https://maxterrenal-hash.github.io/amsone/osmaklogo.png";
-
 // Updated Firebase Configuration for 'osmakams'
 export const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDSJw5370_qdiiWP_qDoYeWb8RhI9ULAv0",

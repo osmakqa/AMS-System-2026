@@ -1,7 +1,7 @@
 
 # Design and Development Change Log (ISO 9001:2015 Clause 8.3.6)
 
-**Project:** Osmak Antimicrobial Stewardship (AMS) System
+**Project:** Antimicrobial Stewardship (AMS) System
 
 ---
 
