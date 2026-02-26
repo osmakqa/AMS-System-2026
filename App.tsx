@@ -651,7 +651,7 @@ function App() {
     const showFilters = (isNursePending || user?.role === UserRole.RESIDENT || 
         (user?.role !== UserRole.AMS_ADMIN && activeTab !== 'Pending' && activeTab !== 'Data Analysis' && activeTab !== 'AMS Monitoring' && activeTab !== 'Password Manager') || 
         (user?.role === UserRole.AMS_ADMIN && (activeTab !== 'Data Analysis' && activeTab !== 'AMS Audit' && activeTab !== 'Password Manager')))
-        && activeTab !== 'Request Form' && activeTab !== 'Doctors' && activeTab !== 'Nurses';
+        && activeTab !== 'Request Form' && activeTab !== 'Doctors' && activeTab !== 'Nurses' && activeTab !== 'IDS';
 
     if (!showFilters) return null;
 

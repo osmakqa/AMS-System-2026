@@ -59,8 +59,8 @@ const PrescriptionCard: React.FC<PrescriptionCardProps> = ({ item, onAction, onV
         </div>
       </div>
 
-      <h3 className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent truncate">{item.hospital_number}</h3>
-      <p className="text-sm text-gray-600 mb-4">Name: {item.patient_name} • Ward: {item.ward || 'N/A'}</p>
+      <h3 className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent truncate">{item.patient_name}</h3>
+      <p className="text-sm text-gray-600 mb-4">ID: {item.hospital_number} • Ward: {item.ward || 'N/A'}</p>
       
       <div className="p-4 rounded-lg mb-5 bg-black/5">
         <div className="flex items-center">
