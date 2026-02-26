@@ -27,14 +27,14 @@ import {
 } from './services/dataService';
 import { db } from './services/firebaseClient';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
-import { WARDS } from './constants';
+import { WARDS, IDS_SPECIALISTS } from './constants';
 
 const tabsConfig: Record<UserRole, string[]> = {
-  [UserRole.PHARMACIST]: ['Request Form', 'Doctors', 'Nurses'], 
-  [UserRole.IDS]: ['Request Form', 'Doctors', 'Nurses'],
-  [UserRole.AMS_ADMIN]: ['Request Form', 'Doctors', 'Nurses', 'Antimicrobials', 'AMS Audit', 'Data Analysis', 'Password Manager'],
-  [UserRole.RESIDENT]: ['Request Form', 'Doctors', 'Nurses'],
-  [UserRole.NURSE]: ['Request Form', 'Doctors', 'Nurses'],
+  [UserRole.PHARMACIST]: ['Request Form', 'Doctors', 'Nurses', 'IDS'], 
+  [UserRole.IDS]: ['Request Form', 'Doctors', 'Nurses', 'IDS'],
+  [UserRole.AMS_ADMIN]: ['Request Form', 'Doctors', 'Nurses', 'IDS', 'Antimicrobials', 'AMS Audit', 'Data Analysis', 'Password Manager'],
+  [UserRole.RESIDENT]: ['Request Form', 'Doctors', 'Nurses', 'IDS'],
+  [UserRole.NURSE]: ['Request Form', 'Doctors', 'Nurses', 'IDS'],
 };
 
 const TabIcon = ({ tabName }: { tabName: string }) => {
@@ -70,6 +70,9 @@ const TabIcon = ({ tabName }: { tabName: string }) => {
         break;
     case 'Password Manager':
         path = <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />;
+        break;
+    case 'IDS':
+        path = <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />;
         break;
     default:
       path = <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />;
@@ -135,6 +138,11 @@ function App() {
   const [historySearchQuery, setHistorySearchQuery] = useState<string>('');
   const [drugTypeFilter, setDrugTypeFilter] = useState<string>('All'); 
 
+  // IDS Tab Login State
+  const [idsLoginName, setIdsLoginName] = useState('');
+  const [idsLoginPassword, setIdsLoginPassword] = useState('');
+  const [idsLoginError, setIdsLoginError] = useState('');
+
   // Filters for History and Admin views
   const [historyIndicationFilter, setHistoryIndicationFilter] = useState<string>('All');
   const [historyWardFilter, setHistoryWardFilter] = useState<string>('All');
@@ -188,6 +196,52 @@ function App() {
     setActiveTab('Request Form');
     if (loggedInUser.role === UserRole.RESIDENT) {
       setSelectedDay(new Date().toLocaleDateString('en-CA'));
+    }
+  };
+
+  const handleIdsLogin = async () => {
+    if (!idsLoginName || !idsLoginPassword) {
+      setIdsLoginError('Please select a name and enter a password.');
+      return;
+    }
+
+    setIdsLoginError('');
+    setLoading(true);
+    try {
+      const allUsers = await fetchUsers();
+      
+      // Find user in DB or use legacy logic
+      let targetUser = allUsers.find(u => u.name === idsLoginName && u.role === UserRole.IDS);
+      
+      if (!targetUser) {
+        // Legacy logic from PasswordManager
+        const legacyPassword = `${idsLoginName.trim().split(' ').pop()?.toLowerCase()}456`;
+        if (idsLoginPassword === legacyPassword || idsLoginPassword === 'doctor123') {
+          targetUser = {
+            id: idsLoginName,
+            name: idsLoginName,
+            role: UserRole.IDS,
+            password: legacyPassword
+          };
+        }
+      } else {
+        if (targetUser.password !== idsLoginPassword && idsLoginPassword !== 'doctor123') {
+          targetUser = undefined;
+        }
+      }
+
+      if (targetUser) {
+        setUser(targetUser);
+        setIdsLoginName('');
+        setIdsLoginPassword('');
+        setIdsLoginError('');
+      } else {
+        setIdsLoginError('Invalid password.');
+      }
+    } catch (err) {
+      setIdsLoginError('Login failed. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1043,6 +1097,126 @@ function App() {
              <PrescriptionTable items={amsItems} onAction={handleActionClick} onView={handleViewDetails} onUpdateWard={handleUpdateWard} onUpdateTentativeDate={handleUpdateTentativeDate} statusType={'ALL_VIEW'} />
            </div>
          );
+      case 'IDS':
+        if (user?.role !== UserRole.IDS) {
+            return (
+                <div className="flex items-center justify-center py-20">
+                    <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-200 w-full max-w-md animate-in fade-in zoom-in duration-300">
+                        <div className="text-center mb-8">
+                            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                </svg>
+                            </div>
+                            <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">IDS Specialist Login</h2>
+                            <p className="text-sm text-gray-500 font-medium">Select your name to access restricted requests</p>
+                        </div>
+                        
+                        <div className="space-y-4">
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Select Specialist</label>
+                                <select 
+                                    value={idsLoginName} 
+                                    onChange={e => setIdsLoginName(e.target.value)}
+                                    className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none transition-all [color-scheme:light]"
+                                >
+                                    <option value="">Choose your name...</option>
+                                    {IDS_SPECIALISTS.map(name => <option key={name} value={name}>{name}</option>)}
+                                </select>
+                            </div>
+                            
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Password</label>
+                                <input 
+                                    type="password" 
+                                    value={idsLoginPassword}
+                                    onChange={e => setIdsLoginPassword(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && handleIdsLogin()}
+                                    placeholder="Enter password"
+                                    className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none transition-all"
+                                />
+                            </div>
+
+                            {idsLoginError && (
+                                <div className="bg-red-50 border border-red-100 text-red-600 text-xs font-bold p-3 rounded-xl flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    {idsLoginError}
+                                </div>
+                            )}
+
+                            <button 
+                                onClick={handleIdsLogin}
+                                disabled={loading}
+                                className="w-full bg-green-600 hover:bg-green-700 text-white font-black uppercase tracking-widest py-4 rounded-xl shadow-lg shadow-green-100 transition-all active:scale-[0.98] disabled:bg-gray-300 flex items-center justify-center gap-2"
+                            >
+                                {loading ? 'Authenticating...' : 'Access IDS Module'}
+                                {!loading && <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const idsItems = data.filter(i => 
+            i.drug_type === DrugType.RESTRICTED && 
+            isIdsNameMatch(user.name, i.id_specialist) &&
+            (statusMatches(i.status, PrescriptionStatus.FOR_IDS_APPROVAL) || statusMatches(i.status, PrescriptionStatus.PENDING))
+        );
+
+        return (
+            <div className="space-y-6 animate-in fade-in duration-500">
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04M12 2.944V12m0 0l4.992-4.992M12 12l-4.992 4.992" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">IDS Specialist Dashboard</h2>
+                            <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Logged in as: <span className="text-green-600">{user.name}</span></p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <div className="bg-green-50 px-4 py-2 rounded-xl border border-green-100">
+                            <span className="text-[10px] font-black text-green-400 uppercase tracking-widest block">Pending Reviews</span>
+                            <span className="text-lg font-black text-green-700">{idsItems.length}</span>
+                        </div>
+                        <button 
+                            onClick={() => setUser({ id: 'default-resident', name: 'Resident Physician', role: UserRole.RESIDENT, password: 'doctor123' })}
+                            className="px-4 py-2 text-xs font-black uppercase tracking-widest text-gray-400 hover:text-red-600 transition-colors"
+                        >
+                            Switch User
+                        </button>
+                    </div>
+                </div>
+
+                {idsItems.length === 0 ? (
+                    <div className="bg-white rounded-2xl p-20 text-center border border-dashed border-gray-300">
+                        <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <h3 className="text-lg font-bold text-gray-400">All caught up!</h3>
+                        <p className="text-sm text-gray-400">No restricted requests pending for your review at this time.</p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {idsItems.map(item => (
+                            <PrescriptionCard 
+                                key={item.id} 
+                                item={item} 
+                                onAction={handleActionClick} 
+                                onView={handleViewDetails} 
+                                role={user.role} 
+                            />
+                        ))}
+                    </div>
+                )}
+            </div>
+        );
       default: return null;
     }
   };
@@ -1063,19 +1237,9 @@ function App() {
       <AMSAuditForm isOpen={isAMSAuditFormOpen} initialData={selectedAuditToEdit} onClose={() => { setIsAMSAuditFormOpen(false); setSelectedAuditToEdit(null); }} />
       <AMSAuditDetailModal isOpen={!!selectedAuditForView} onClose={() => setSelectedAuditForView(null)} audit={selectedAuditForView} />
       
-      {user && (user.role === UserRole.PHARMACIST || user.role === UserRole.IDS) && (
-          <SettingsModal 
-            isOpen={isSettingsOpen} 
-            onClose={() => setIsSettingsOpen(false)} 
-            user={user} 
-            onPasswordChange={(newPass) => setUser({ ...user, password: newPass })}
-          />
-      )}
-
       <Layout 
         user={user!} 
         onLogout={handleLogout} 
-        onOpenSettings={() => setIsSettingsOpen(true)}
         tabs={currentTabs} 
         activeTab={activeTab} 
         onTabChange={handleTabSelection}

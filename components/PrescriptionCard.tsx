@@ -89,7 +89,7 @@ const PrescriptionCard: React.FC<PrescriptionCardProps> = ({ item, onAction, onV
           </>
         )}
 
-        {role === UserRole.IDS && item.status === PrescriptionStatus.FOR_IDS_APPROVAL && (
+        {role === UserRole.IDS && (item.status === PrescriptionStatus.FOR_IDS_APPROVAL || item.status === PrescriptionStatus.PENDING) && (
            <>
              <button onClick={() => onAction(item.id, ActionType.APPROVE)} className={`flex-1 ${btnBase} bg-green-600 text-white hover:bg-green-700`}><CheckIcon/> Approve</button>
              <button onClick={() => onAction(item.id, ActionType.DISAPPROVE)} className={`flex-1 ${btnBase} bg-white text-red-600 border border-red-200 hover:bg-red-50`}><XIcon/> Disapprove</button>
