@@ -3,6 +3,7 @@ import Layout from './components/Layout';
 import PrescriptionCard from './components/PrescriptionCard';
 import PrescriptionTable from './components/PrescriptionTable';
 import StatsChart from './components/StatsChart';
+import PasswordModal from './components/PasswordModal';
 import DetailModal from './components/DetailModal';
 import DisapproveModal from './components/DisapproveModal';
 import ChartDetailModal from './components/ChartDetailModal';
@@ -11,6 +12,7 @@ import AMSAuditForm from './components/AMSAuditForm';
 import AMSAuditTable from './components/AMSAuditTable'; 
 import AMSAuditDetailModal from './components/AMSAuditDetailModal'; 
 import AMSMonitoring from './components/AMSMonitoring'; 
+import PasswordManager from './components/PasswordManager';
 import SettingsModal from './components/SettingsModal';
 import { User, UserRole, Prescription, PrescriptionStatus, ActionType, DrugType, AMSAudit, MonitoringPatient } from './types';
 import { 
@@ -30,7 +32,7 @@ import { WARDS, IDS_SPECIALISTS } from './constants';
 const tabsConfig: Record<UserRole, string[]> = {
   [UserRole.PHARMACIST]: ['Request Form', 'Doctors', 'Nurses', 'IDS'], 
   [UserRole.IDS]: ['Request Form', 'Doctors', 'Nurses', 'IDS'],
-  [UserRole.AMS_ADMIN]: ['Request Form', 'Doctors', 'Nurses', 'IDS', 'Antimicrobials', 'AMS Audit', 'Data Analysis'],
+  [UserRole.AMS_ADMIN]: ['Request Form', 'Doctors', 'Nurses', 'IDS', 'Antimicrobials', 'AMS Audit', 'Data Analysis', 'Password Manager'],
   [UserRole.RESIDENT]: ['Request Form', 'Doctors', 'Nurses', 'IDS'],
   [UserRole.NURSE]: ['Request Form', 'Doctors', 'Nurses', 'IDS'],
 };
@@ -198,23 +200,44 @@ function App() {
   };
 
   const handleIdsLogin = async () => {
-    if (!idsLoginName) {
-      setIdsLoginError('Please select a name.');
+    if (!idsLoginName || !idsLoginPassword) {
+      setIdsLoginError('Please select a name and enter a password.');
       return;
     }
 
     setIdsLoginError('');
     setLoading(true);
     try {
-      setUser({
-        id: idsLoginName,
-        name: idsLoginName,
-        role: UserRole.IDS,
-        password: ''
-      });
-      setIdsLoginName('');
-      setIdsLoginPassword('');
-      setIdsLoginError('');
+      const allUsers = await fetchUsers();
+      
+      // Find user in DB or use legacy logic
+      let targetUser = allUsers.find(u => u.name === idsLoginName && u.role === UserRole.IDS);
+      
+      if (!targetUser) {
+        // Legacy logic from PasswordManager
+        const legacyPassword = `${idsLoginName.trim().split(' ').pop()?.toLowerCase()}456`;
+        if (idsLoginPassword === legacyPassword || idsLoginPassword === 'doctor123') {
+          targetUser = {
+            id: idsLoginName,
+            name: idsLoginName,
+            role: UserRole.IDS,
+            password: legacyPassword
+          };
+        }
+      } else {
+        if (targetUser.password !== idsLoginPassword && idsLoginPassword !== 'doctor123') {
+          targetUser = undefined;
+        }
+      }
+
+      if (targetUser) {
+        setUser(targetUser);
+        setIdsLoginName('');
+        setIdsLoginPassword('');
+        setIdsLoginError('');
+      } else {
+        setIdsLoginError('Invalid password.');
+      }
     } catch (err) {
       setIdsLoginError('Login failed. Please try again.');
     } finally {
@@ -270,11 +293,8 @@ function App() {
     }
 
     if (type === ActionType.ADMIN_EDIT) {
-        const itemToEdit = data.find(i => i.id === id);
-        if (itemToEdit) {
-            setRequestToEdit(itemToEdit);
-            setIsAntimicrobialRequestFormOpen(true);
-        }
+        setPendingAction({ id, type });
+        setIsPasswordModalOpen(true);
         return;
     }
 
@@ -293,9 +313,62 @@ function App() {
 
       case ActionType.DELETE:
       case ActionType.FORWARD_IDS:
-        executeAction(id, type);
+        setPendingAction({ id, type });
+        setIsPasswordModalOpen(true);
         break;
     }
+  };
+
+  const handleConfirmPassword = () => {
+    setIsPasswordModalOpen(false);
+    if (!pendingAction) return;
+
+    if (pendingAction.type === ActionType.ADMIN_PASSWORD_FOR_TAB) {
+        setActiveTab('Password Manager');
+        setPendingAction(null);
+        return;
+    }
+
+    if (pendingAction.type === ActionType.ADMIN_PASSWORD_FOR_DISAPPROVED || pendingAction.type === ActionType.ADMIN_PASSWORD_FOR_NURSES) {
+        setActiveTab(pendingAction.type === ActionType.ADMIN_PASSWORD_FOR_DISAPPROVED ? 'Doctors' : 'Nurses');
+        setPendingAction(null);
+        return;
+    }
+
+    if (pendingAction.type === ActionType.ADMIN_EDIT) {
+        const itemToEdit = data.find(i => i.id === pendingAction.id);
+        if (itemToEdit) {
+            setRequestToEdit(itemToEdit);
+            setIsAntimicrobialRequestFormOpen(true);
+        }
+        setPendingAction(null);
+        return;
+    }
+
+    executeAction(pendingAction.id, pendingAction.type);
+    setPendingAction(null);
+  };
+
+  const getCurrentUserPassword = (u: User | null) => {
+    if (!u) return 'osmak123';
+    
+    // Check if user object has a custom password (persistent)
+    if (u.password) return u.password;
+
+    // LEGACY LOGIC
+    if (u.role === UserRole.AMS_ADMIN) return 'ams123';
+    if (u.role === UserRole.RESIDENT) return 'doctor123';
+    if (u.role === UserRole.NURSE) return 'osmaknurse';
+    if (u.role === UserRole.PHARMACIST) {
+      const lastName = u.name.split(',')[0].trim().toLowerCase().replace(/\s/g, '');
+      return `${lastName}123`;
+    }
+    if (u.role === UserRole.IDS) {
+      const parts = u.name.trim().split(' ');
+      const lastName = parts[parts.length - 1].toLowerCase();
+      return `${lastName}456`;
+    }
+    return 'osmak123';
   };
 
   const handleDisapproveSubmit = async (reason: string, details: string) => {
@@ -439,6 +512,24 @@ function App() {
   };
 
   const handleTabSelection = (tab: string) => {
+    if (tab === 'Password Manager' && user?.role === UserRole.AMS_ADMIN) {
+        setPendingAction({ id: 'tab-security', type: ActionType.ADMIN_PASSWORD_FOR_TAB });
+        setIsPasswordModalOpen(true);
+        return;
+    }
+    
+    if (tab === 'Doctors') {
+        setPendingAction({ id: 'tab-doctors', type: ActionType.ADMIN_PASSWORD_FOR_DISAPPROVED });
+        setIsPasswordModalOpen(true);
+        return;
+    }
+
+    if (tab === 'Nurses') {
+        setPendingAction({ id: 'tab-nurses', type: ActionType.ADMIN_PASSWORD_FOR_NURSES });
+        setIsPasswordModalOpen(true);
+        return;
+    }
+    
     setActiveTab(tab); 
     if(tab === 'History' || tab === 'Antimicrobials') {
       setHistoryStatusFilter(user?.role === UserRole.PHARMACIST ? 'All' : 'Approved');
@@ -870,6 +961,10 @@ function App() {
       );
     }
 
+    if (activeTab === 'Password Manager' && user?.role === UserRole.AMS_ADMIN) {
+        return <PasswordManager />;
+    }
+
     if (activeTab === 'AMS Audit' && user?.role === UserRole.AMS_ADMIN) {
         return (
             <div className="space-y-4">
@@ -1030,6 +1125,18 @@ function App() {
                                 </select>
                             </div>
                             
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Password</label>
+                                <input 
+                                    type="password" 
+                                    value={idsLoginPassword}
+                                    onChange={e => setIdsLoginPassword(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && handleIdsLogin()}
+                                    placeholder="Enter password"
+                                    className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-800 focus:ring-2 focus:ring-green-200 focus:border-green-500 outline-none transition-all"
+                                />
+                            </div>
+
                             {idsLoginError && (
                                 <div className="bg-red-50 border border-red-100 text-red-600 text-xs font-bold p-3 rounded-xl flex items-center gap-2">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -1162,6 +1269,21 @@ function App() {
             </div>
           </div>
         )}
+        <PasswordModal 
+            isOpen={isPasswordModalOpen} 
+            onClose={() => setIsPasswordModalOpen(false)} 
+            onConfirm={handleConfirmPassword} 
+            expectedPassword={
+                pendingAction?.type === ActionType.ADMIN_PASSWORD_FOR_DISAPPROVED ? 'doctor123' : 
+                pendingAction?.type === ActionType.ADMIN_PASSWORD_FOR_NURSES ? 'osmaknurse' : 
+                getCurrentUserPassword(user)
+            } 
+            title={
+                pendingAction?.type === ActionType.ADMIN_PASSWORD_FOR_DISAPPROVED ? 'Enter Password to View Doctors Requests' : 
+                pendingAction?.type === ActionType.ADMIN_PASSWORD_FOR_NURSES ? 'Enter Password to View Nurses Dashboard' : 
+                undefined
+            }
+        />
         <DisapproveModal isOpen={isDisapproveModalOpen} onClose={() => setIsDisapproveModalOpen(false)} onSubmit={handleDisapproveSubmit} loading={isSubmitting} />
         <DetailModal isOpen={!!selectedItemForView} onClose={() => setSelectedItemForView(null)} item={selectedItemForView} role={user!.role} userName={user!.name} onAction={handleActionClick} />
         <div className="pb-20 md:pb-0">{FilterHeader()}{renderContent()}</div>
