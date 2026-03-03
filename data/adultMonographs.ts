@@ -42,6 +42,18 @@ export const ADULT_MONOGRAPHS: { [key: string]: DrugMonograph } = {
     ams: "Restricted; reserve for serious Gram-negative infections or as part of NTM regimens. De-escalate as soon as cultures allow.",
     weightBased: true
   },
+  "Amphotericin B": {
+    restricted: true,
+    spectrum: "Broad-spectrum antifungal active against most yeasts (Candida, Cryptococcus) and molds (Aspergillus, Mucorales).",
+    dosing: "Conventional (Deoxycholate): 0.5–1.5 mg/kg IV q24h. Lipid formulations (e.g., AmBisome): 3–5 mg/kg IV q24h. Pre-hydration with 500–1000 mL normal saline is often recommended to reduce nephrotoxicity.",
+    renal: "Highly nephrotoxic. No specific dose reduction for renal impairment, but requires close monitoring of SCr and electrolytes. Consider switching to lipid formulation or alternative if SCr increases significantly.",
+    hepatic: "No routine dosage adjustment required; monitor LFTs with prolonged therapy.",
+    duration: "Syndrome-dependent; e.g., Cryptococcal meningitis induction is typically 2 weeks followed by fluconazole.",
+    monitoring: "Renal function (SCr/BUN), electrolytes (K, Mg), CBC (anemia), and infusion-related reactions (fever, chills, rigors).",
+    warnings: "Significant risk of nephrotoxicity and electrolyte wasting (hypokalemia, hypomagnesemia). Infusion-related reactions are common ('shake and bake'). Avoid concurrent nephrotoxins.",
+    ams: "Restricted. Reserve for life-threatening or refractory systemic fungal infections, CNS disease, or when safer alternatives are unsuitable.",
+    weightBased: true
+  },
   "Aztreonam": {
     restricted: true,
     spectrum: "Active vs Enterobacterales, Pseudomonas aeruginosa, and other Gram-negative aerobes; no activity vs Gram-positive organisms or anaerobes.",

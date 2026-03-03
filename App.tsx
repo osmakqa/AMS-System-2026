@@ -14,6 +14,7 @@ import AMSAuditDetailModal from './components/AMSAuditDetailModal';
 import AMSMonitoring from './components/AMSMonitoring'; 
 import PasswordManager from './components/PasswordManager';
 import SettingsModal from './components/SettingsModal';
+import Login from './components/Login';
 import { User, UserRole, Prescription, PrescriptionStatus, ActionType, DrugType, AMSAudit, MonitoringPatient } from './types';
 import { 
   fetchPrescriptions, 
@@ -102,12 +103,7 @@ const isIdsNameMatch = (userName: string, recordName: string | undefined | null)
 
 
 function App() {
-  const [user, setUser] = useState<User | null>({
-    id: 'default-resident',
-    name: 'Resident Physician',
-    role: UserRole.RESIDENT,
-    password: 'doctor123'
-  });
+  const [user, setUser] = useState<User | null>(null);
   const [data, setData] = useState<Prescription[]>([]);
   const [auditData, setAuditData] = useState<AMSAudit[]>([]); 
   const [monitoringData, setMonitoringData] = useState<MonitoringPatient[]>([]);
@@ -252,6 +248,7 @@ function App() {
     setMonitoringData([]);
     setDbError(null);
     setNurseWardFilter('All');
+    setActiveTab('Request Form');
   };
 
   const handleViewDetails = (item: Prescription) => {
@@ -1221,7 +1218,11 @@ function App() {
     }
   };
   
-  const currentTabs = user ? tabsConfig[user.role] : tabsConfig[UserRole.PHARMACIST]; 
+  const currentTabs = user ? tabsConfig[user.role] : []; 
+
+  if (!user) {
+    return <Login onLogin={handleLogin} />;
+  }
 
   return (
     <>

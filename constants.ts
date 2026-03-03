@@ -84,7 +84,7 @@ export const MONITORED_DRUGS = [
 export const RESTRICTED_DRUGS = [
   "Imipenem", "Imipenem-Cilastatin", "Ciprofloxacin", "Levofloxacin", "Moxifloxacin", "Ceftriaxone", 
   "Ceftazidime", "Cefixime", "Cefpodoxime", 
-  "Gentamicin", "Amikacin", "Clindamycin", "Fluconazole IV"
+  "Gentamicin", "Amikacin", "Clindamycin", "Fluconazole IV", "Amphotericin B"
 ].sort();
 
 export const DETAILED_SYSTEM_SITE_OPTIONS = [
