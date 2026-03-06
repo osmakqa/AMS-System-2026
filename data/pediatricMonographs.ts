@@ -82,6 +82,19 @@ export const PEDIATRIC_MONOGRAPHS: { [key: string]: DrugMonograph } = {
     mgPerKgDose: 50,
     restricted: true
   },
+  "Cefixime": {
+    spectrum: "Third-generation cephalosporin; active vs many Gram-negatives; limited Gram-positive; no Pseudomonas.",
+    dosing: "8 mg/kg/day PO (single dose or divided q12h); max 400 mg/day.",
+    renal: "Adjust dose if eGFR <60 mL/min/1.73m².",
+    hepatic: "No adjustment required.",
+    duration: "Typically 5–10 days.",
+    monitoring: "Clinical response; renal function if prolonged.",
+    warnings: "Hypersensitivity; GI side effects common (diarrhea).",
+    ams: "Monitored; useful for oral step-down.",
+    weightBased: true,
+    mgPerKgDose: 8,
+    restricted: false
+  },
   "Colistin": {
     spectrum: "Polymyxin active mainly against multidrug-resistant Gram-negative bacilli (e.g., Acinetobacter, Pseudomonas, some Enterobacteriaceae).",
     dosing: "Dose expressed as colistin base activity; protocols vary (e.g., 2.5–5 mg CBA/kg/day IV in divided doses). Use institutional dosing guideline.",

@@ -78,6 +78,18 @@ export const ADULT_MONOGRAPHS: { [key: string]: DrugMonograph } = {
     ams: "Restricted for Pseudomonas, severe GNB infections, or when broad Gram-negative coverage is needed.",
     weightBased: false
   },
+  "Cefixime": {
+    restricted: false,
+    spectrum: "Third-generation cephalosporin; active vs many Gram-negatives (H. influenzae, M. catarrhalis, Neisseria spp., some Enterobacterales); limited Gram-positive (Streptococcus spp.); no Pseudomonas or anaerobes.",
+    dosing: "400 mg PO daily (as single dose or 200 mg q12h).",
+    renal: "CrCl 21–60: 300 mg daily; CrCl <20: 200 mg daily. HD: 200 mg daily (give after dialysis).",
+    hepatic: "No adjustment required.",
+    duration: "Typically 3–10 days depending on infection.",
+    monitoring: "Renal function; clinical response.",
+    warnings: "Hypersensitivity to beta-lactams; risk of C. difficile; potential for increased INR with warfarin.",
+    ams: "Monitored antimicrobial; often used for step-down therapy for UTIs or respiratory infections.",
+    weightBased: false
+  },
   "Ceftazidime–Avibactam (NF)": {
     restricted: true,
     spectrum: "Active vs ESBL, AmpC, and KPC-producing Enterobacterales; active vs many MDR GNB including Pseudomonas. Not active vs metallo-β-lactamases or organisms with efflux/porin resistance.",

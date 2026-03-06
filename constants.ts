@@ -78,12 +78,12 @@ export const MONITORED_DRUGS = [
   "Meropenem", "Ertapenem", "Doripenem", "Gentamicin", 
   "Amikacin", "Ciprofloxacin", "Levofloxacin", "Moxifloxacin", 
   "Aztreonam", "Ceftolozane-Tazobactam", "Colistin", "Linezolid", 
-  "Tigecycline", "Vancomycin", "Cefepime", "Fluconazole oral", "Cefotaxime"
+  "Tigecycline", "Vancomycin", "Cefepime", "Fluconazole oral", "Cefotaxime", "Cefixime"
 ].sort();
 
 export const RESTRICTED_DRUGS = [
   "Imipenem", "Imipenem-Cilastatin", "Ciprofloxacin", "Levofloxacin", "Moxifloxacin", "Ceftriaxone", 
-  "Ceftazidime", "Cefixime", "Cefpodoxime", 
+  "Ceftazidime", "Cefpodoxime", 
   "Gentamicin", "Amikacin", "Clindamycin", "Fluconazole IV", "Amphotericin B"
 ].sort();
 
