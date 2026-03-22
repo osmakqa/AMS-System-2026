@@ -1159,7 +1159,7 @@ const AMSAuditForm: React.FC<AMSAuditFormProps> = ({ isOpen, onClose, initialDat
                 </FormGroup>
                 <FormGroup label="Weight (kg)" required error={validationErrors.patient_weight}><Input type="number" name="weight" value={patient.weight} onChange={handlePatientChange} error={validationErrors.patient_weight} /></FormGroup>
                 <FormGroup label="Height (cm)" required={patientMode === 'pediatric'} error={validationErrors.patient_height}><Input type="number" name="height" value={patient.height} onChange={handlePatientChange} error={validationErrors.patient_height} /></FormGroup>
-                <FormGroup label="SCr (µmol/L)" required error={validationErrors.patient_scr}><Input type="number" name="scr" value={patient.scr} onChange={handlePatientChange} error={validationErrors.patient_scr} /></FormGroup>
+                <FormGroup label="SCr (𝜇mol/L)" required error={validationErrors.patient_scr}><Input type="number" name="scr" value={patient.scr} onChange={handlePatientChange} error={validationErrors.patient_scr} /></FormGroup>
                 <FormGroup label="SCr Result Date" required error={validationErrors.patient_scrDate}><Input type="date" name="scrDate" value={patient.scrDate} onChange={handlePatientChange} error={validationErrors.patient_scrDate} max={audit.date} /></FormGroup>
                 <FormGroup label="eGFR"><div className="rounded-lg border border-gray-300 px-3 py-2 text-sm bg-gray-100 text-gray-700">{patient.egfr || '—'}</div></FormGroup>
               </div>

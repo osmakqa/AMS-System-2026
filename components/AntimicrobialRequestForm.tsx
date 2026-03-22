@@ -1042,7 +1042,7 @@ const AntimicrobialRequestForm: React.FC<AntimicrobialRequestFormProps> = ({ isO
                         </FormGroup>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
-                        <FormGroup label="Serum Creatinine (µmol/L)" className="md:col-span-2" error={validationErrors.scr_mgdl}>
+                        <FormGroup label="Serum Creatinine (𝜇mol/L)" className="md:col-span-2" error={validationErrors.scr_mgdl}>
                              <div className="flex flex-col gap-2">
                                 <div className="flex items-center gap-2">
                                     <Input id="scr_mgdl" error={!!validationErrors.scr_mgdl} type="number" name="scr_mgdl" value={formData.scr_mgdl} onChange={handleChange} disabled={scrNotAvailable} className="flex-1" />
